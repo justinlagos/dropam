@@ -1,0 +1,7 @@
+{
+  "name": "Dropam OS",
+  "description": "Premium workflow platform for high-trust creative pods. Features spatial organization, magic AI briefing, and single-link brand drops.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

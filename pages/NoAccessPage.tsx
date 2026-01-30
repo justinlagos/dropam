@@ -1,0 +1,158 @@
+import React, { useState } from 'react';
+import { useUser } from '../contexts/UserContext';
+import { useData } from '../contexts/DataContext';
+import { Link } from 'react-router-dom';
+import { ArrowRight, LayoutGrid, Droplets, Database, Loader2 } from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
+
+export const NoAccessPage: React.FC = () => {
+  const { currentUser } = useUser();
+  const { pods, brands, loading } = useData();
+  const [seeding, setSeeding] = useState(false);
+
+  const handleInitialize = async () => {
+    setSeeding(true);
+    try {
+        // 1. Create Pod
+        const { data: pod, error: podError } = await supabase
+            .from('pods')
+            .insert({ name: 'Tier 1', slug: 'tier-1', lead_name: 'Ade' })
+            .select()
+            .single();
+
+        if (podError) {
+             if (podError.code === '42P01') {
+                 alert("Tables missing! Please run the SQL Schema in your Supabase Dashboard first.");
+                 return;
+             }
+             throw podError;
+        }
+
+        // 2. Create Brands
+        const { error: brandError } = await supabase
+            .from('brands')
+            .insert([
+                { name: 'Sparkle', slug: 'sparkle', pod_id: pod.id },
+                { name: 'Access Bank', slug: 'access', pod_id: pod.id },
+                { name: 'Cardinal Stone', slug: 'cardinalstone', pod_id: pod.id }
+            ]);
+
+        if (brandError) throw brandError;
+
+        // 3. Create initial folder
+        await supabase.from('folders').insert({
+             pod_id: pod.id,
+             name: 'Archive Q1',
+             position_x: 50,
+             position_y: 550
+        });
+
+        window.location.reload();
+
+    } catch (err) {
+        console.error("Initialization failed:", err);
+        alert("Failed to initialize. See console for details.");
+    } finally {
+        setSeeding(false);
+    }
+  };
+
+  const isClient = currentUser.role === 'client';
+
+  return (
+    <div className="min-h-screen bg-[#F5F5F7] flex flex-col items-center justify-center p-8 font-sans">
+      <div className="max-w-2xl w-full">
+        
+        <div className="text-center mb-12">
+            <h1 className="text-3xl font-bold text-[#111111] mb-2 tracking-tight">Dropam OS</h1>
+            <p className="text-gray-500">
+                Logged in as <span className="font-semibold text-[#111111]">{currentUser.name}</span> ({currentUser.role})
+            </p>
+        </div>
+
+        {/* Directory Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            
+            {/* Pods Column - Hidden for Clients */}
+            {!isClient && (
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col">
+                    <div className="flex items-center gap-2 mb-6 text-[#111111]">
+                        <LayoutGrid size={20} />
+                        <h2 className="font-bold">Active Pods</h2>
+                    </div>
+                    
+                    {loading ? (
+                        <div className="h-20 flex items-center justify-center text-xs text-gray-400">Loading Pods...</div>
+                    ) : pods.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center min-h-[120px] text-center">
+                            <p className="text-xs text-gray-400 mb-4">No pods found.</p>
+                            <button 
+                                onClick={handleInitialize}
+                                disabled={seeding}
+                                className="px-4 py-2 bg-[#111111] text-white text-xs font-medium rounded-lg hover:scale-105 transition-transform flex items-center gap-2"
+                            >
+                                {seeding ? <Loader2 size={12} className="animate-spin" /> : <Database size={12} />}
+                                Initialize System
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {pods.map(pod => (
+                                <Link 
+                                    key={pod.id} 
+                                    to={`/pod/${pod.slug}`}
+                                    className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors group"
+                                >
+                                    <span className="text-sm font-medium text-gray-700 group-hover:text-[#111111]">{pod.name}</span>
+                                    <ArrowRight size={14} className="text-gray-300 group-hover:text-[#111111] transition-colors" />
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Brands Column - Full width for clients if desired, but grid is fine */}
+            <div className={`bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col ${isClient ? 'md:col-span-2' : ''}`}>
+                <div className="flex items-center gap-2 mb-6 text-[#111111]">
+                    <Droplets size={20} />
+                    <h2 className="font-bold">Client Drops</h2>
+                </div>
+
+                {loading ? (
+                    <div className="h-20 flex items-center justify-center text-xs text-gray-400">Loading Brands...</div>
+                ) : brands.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center min-h-[120px]">
+                        <p className="text-xs text-gray-400">No brands found.</p>
+                        {pods.length === 0 && !isClient && (
+                            <p className="text-[10px] text-gray-300 mt-1">Initialize system to see brands</p>
+                        )}
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {brands.map(brand => (
+                            <Link 
+                                key={brand.id} 
+                                to={`/drop/${brand.slug}`}
+                                className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors group"
+                            >
+                                <span className="text-sm font-medium text-gray-700 group-hover:text-[#111111]">{brand.name}</span>
+                                <ArrowRight size={14} className="text-gray-300 group-hover:text-[#111111] transition-colors" />
+                            </Link>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+        </div>
+
+        <div className="mt-12 text-center">
+            <Link to="/settings" className="text-xs text-gray-400 hover:text-[#111111] underline decoration-gray-300 underline-offset-4">
+                System Settings
+            </Link>
+        </div>
+
+      </div>
+    </div>
+  );
+};
