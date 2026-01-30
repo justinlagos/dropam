@@ -154,3 +154,148 @@ Users must never refresh to see activity.
 ## Non-negotiable release gate
 
 If any part violates this document, it does not ship.
+
+---
+
+## APPENDIX: DATA PHILOSOPHY (READ BEFORE ASKING FOR ANALYTICS)
+
+This appendix clarifies how Dropam treats data.
+
+Dropam is **data-aware**, not **data-interpretive**.
+
+---
+
+### A. WHAT DROPAM COLLECTS (SILENTLY)
+
+Dropam naturally collects **raw operational data** as a byproduct of work moving.
+
+This includes:
+- brief creation timestamps
+- brief state changes and timestamps
+- ownership and reassignment events
+- file uploads and deliveries
+- message events
+- current brief distribution across pods and people
+
+No additional tracking is added beyond what is required for the system to function.
+
+---
+
+### B. WHAT DROPAM DISPLAYS (IN REAL TIME)
+
+Dropam displays:
+- the current state of work
+- who is holding what
+- where congestion exists
+- where space exists
+
+This is shown:
+- spatially
+- visually
+- live
+
+No abstraction.
+No aggregation.
+No interpretation.
+
+The canvas **is the visibility layer**.
+
+---
+
+### C. WHAT DROPAM REFUSES TO DISPLAY
+
+Dropam will never display:
+- charts
+- graphs
+- KPIs
+- productivity scores
+- performance rankings
+- efficiency metrics
+- comparative analytics
+
+These are **interpretive tools**, not operational ones.
+
+The moment interpretation enters the surface, Dropam stops being an operating system and becomes a management tool.
+
+---
+
+### D. WHERE ANALYSIS BELONGS (INTENTIONALLY OUTSIDE)
+
+Analysis belongs:
+- in exports
+- in spreadsheets
+- in reports
+- in BI tools
+- in review meetings
+- in human conversations
+
+Not inside the operating surface.
+
+Dropam supports this by:
+- keeping clean, structured data
+- allowing export or read access
+- not editorializing the data
+
+---
+
+### E. THE CORE DISTINCTION (NON-NEGOTIABLE)
+
+Dropam answers:
+"What is happening right now?"
+
+Dropam refuses to answer:
+"How well are people performing?"
+
+This boundary is permanent.
+
+---
+
+### F. WHY THIS BOUNDARY EXISTS
+
+The moment performance metrics appear inside the system:
+1. People optimize for numbers, not work
+2. Work becomes political
+3. The desktop metaphor collapses
+4. The surface becomes hostile
+
+Dropam exists to **support work**, not measure humans.
+
+---
+
+### G. ADMIN VISIBILITY DEFINED
+
+When we say:
+"Admin may observe flow"
+
+We mean:
+- seeing load
+- seeing congestion
+- seeing idleness
+- seeing imbalance
+
+The same way one observes:
+- a crowded desk
+- an empty room
+- a busy studio
+
+No scoring.
+No judgment.
+No ranking.
+
+---
+
+### H. FINAL RULE
+
+If a data feature requires:
+- explanation
+- interpretation
+- justification
+- performance framing
+
+It does not belong in Dropam.
+
+Data exists.
+Insight exists.
+Judgment does not live here.
+
+This boundary is final.
