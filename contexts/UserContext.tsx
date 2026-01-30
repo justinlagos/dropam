@@ -24,13 +24,19 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       id: profile.id,
       email: profile.email || sessionUser.email || '',
       name: profile.name || sessionUser.email?.split('@')[0] || 'User',
-      role: profile.role || 'creative',
+      role: (profile.role === 'creative' ? 'pod_member' : profile.role) || 'pod_member',
       podId: profile.pod_id,
       brandId: profile.brand_id,
       preferences: profile.preferences
   });
 
   const handleUserSession = async (sessionUser: any) => {
+    const fallbackUser = {
+      id: sessionUser.id,
+      email: sessionUser.email || '',
+      name: sessionUser.email?.split('@')[0] || 'User',
+      role: 'pod_member' as const,
+    };
     try {
         setError(null);
         
@@ -51,15 +57,18 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // 2. Self-Heal: If profile is missing (auth exists, but db row doesn't), create it.
         // We ignore 'PGRST116' which is "Result contains 0 rows" - meaning we need to create one.
         if (!profile) {
-            console.log("Profile missing for authenticated user. Auto-creating...");
+            const meta = sessionUser.user_metadata || {};
+            const role = meta.role === 'client' ? 'client' : 'pod_member';
+            const insertRow: Record<string, any> = {
+                id: sessionUser.id,
+                email: sessionUser.email,
+                role,
+                name: meta.name || sessionUser.email?.split('@')[0] || 'User'
+            };
+            if (role === 'client' && meta.brand_id) insertRow.brand_id = meta.brand_id;
             const { data: newProfile, error: createError } = await supabase
                 .from('profiles')
-                .insert({
-                    id: sessionUser.id,
-                    email: sessionUser.email,
-                    role: 'creative', // Default permission
-                    name: sessionUser.email?.split('@')[0] || 'User'
-                })
+                .insert(insertRow)
                 .select()
                 .single();
             
@@ -81,45 +90,67 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (profile) {
             setCurrentUser(mapProfileToUser(profile, sessionUser));
         } else {
-            // Fallback if profile creation failed completely
-             setCurrentUser({
-                id: sessionUser.id,
-                email: sessionUser.email || '',
-                name: sessionUser.email?.split('@')[0] || 'User',
-                role: 'creative'
-            });
+            setCurrentUser({ ...fallbackUser, podId: undefined, brandId: undefined });
         }
 
     } catch (e: any) {
         console.error("Session handling error:", e);
         setError(e.message);
+        setCurrentUser({ ...fallbackUser, podId: undefined, brandId: undefined });
     }
   };
 
   useEffect(() => {
     let mounted = true;
 
-    // We rely SOLELY on onAuthStateChange to handle initialization and updates.
-    // This avoids race conditions between a manual getSession() and the listener firing.
+    const syncSession = async (session: any) => {
+      if (!mounted || !session?.user) return;
+      try {
+        await Promise.race([
+          handleUserSession(session.user),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+        ]);
+      } catch (e) {
+        if (mounted) {
+          const fallback = { id: session.user.id, email: session.user.email || '', name: session.user.email?.split('@')[0] || 'User', role: 'pod_member' as const };
+          setCurrentUser(fallback);
+        }
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
+
+    // Bootstrap immediately with getSession (avoids waiting for onAuthStateChange)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      if (session?.user) {
+        syncSession(session);
+      } else {
+        setCurrentUser(null);
+        setIsLoading(false);
+      }
+    });
+
+    // Safety: never hang on loading > 5s
+    const t = setTimeout(() => { if (mounted) setIsLoading(false); }, 5000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (!mounted) return;
 
         if (session?.user) {
             if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-                 // Only fetch if we don't have the user, or if it's a new session
-                 // But strictly, we should just sync state to be safe.
-                 await handleUserSession(session.user);
-            }
-        } else if (event === 'SIGNED_OUT') {
+                 await syncSession(session);
+            } else if (mounted) setIsLoading(false);
+        } else {
             setCurrentUser(null);
             setError(null);
+            setIsLoading(false);
         }
-        
-        if (mounted) setIsLoading(false);
     });
 
     return () => {
         mounted = false;
+        clearTimeout(t);
         subscription.unsubscribe();
     };
   }, []);

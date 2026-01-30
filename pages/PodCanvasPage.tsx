@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { useUser } from '../contexts/UserContext';
 import { useActions } from '../contexts/ActionContext';
@@ -11,13 +11,16 @@ import { SpatialCanvas } from '../components/SpatialCanvas';
 import { Brief } from '../types';
 import { Search, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ContextMenu, MenuItem } from '../components/ContextMenu';
+import { ContextMenu } from '../components/ContextMenu';
+import { getBriefContextMenuItems } from '../actions/briefActions';
+import { getFolderContextMenuItems, getCanvasContextMenuItems } from '../actions/folderActions';
 
 export const PodCanvasPage: React.FC = () => {
   const { podSlug } = useParams<{ podSlug: string }>();
   const { pods, briefs, brands, folders, loading } = useData();
   const { currentUser, checkPermission } = useUser();
-  const { updateBriefPosition, updateFolderPosition, moveBriefToFolder, stackBriefs, createFolder, updateBriefStatus, deleteBrief, assignBrief, updateBriefMeta } = useActions();
+  const actions = useActions();
+  const { updateBriefPosition, updateFolderPosition, moveBriefToFolder, createFolder, updateBriefStatus, deleteBrief, deleteFolder, assignBrief, updateBriefMeta, updateBriefTitle, updateFolderName } = actions;
   
   const pod = pods.find(p => p.slug === podSlug);
   const [selectedBrief, setSelectedBrief] = useState<Brief | null>(null);
@@ -25,7 +28,8 @@ export const PodCanvasPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'brief' | 'folder' | 'canvas', id?: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'brief' | 'folder' | 'canvas'; id?: string } | null>(null);
+  const [panelFocusMeta, setPanelFocusMeta] = useState(false);
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
   if (!pod) return <div>Pod not found</div>;
@@ -61,9 +65,10 @@ export const PodCanvasPage: React.FC = () => {
     <div className="h-screen w-screen flex flex-col bg-[#F5F5F7] overflow-hidden">
       {/* Top Bar */}
       <div className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-gray-100 bg-white/50 backdrop-blur-sm">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-bold text-[#111111] tracking-tight">{pod.name}</h1>
-          <div className="relative">
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-4">
+            <h1 className="text-lg font-bold text-[#111111] tracking-tight">{pod.name}</h1>
+            <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -73,6 +78,8 @@ export const PodCanvasPage: React.FC = () => {
               className="pl-9 pr-4 py-2 w-64 text-sm bg-gray-50 border border-gray-100 rounded-xl outline-none focus:border-gray-200"
             />
           </div>
+          </div>
+          <Link to="/settings" className="text-xs font-medium text-gray-500 hover:text-[#111111]">Settings</Link>
         </div>
       </div>
 
@@ -126,37 +133,82 @@ export const PodCanvasPage: React.FC = () => {
             <SidePanel
               brief={selectedBrief}
               brand={brands.find(b => b.id === selectedBrief.brandId)!}
-              onClose={() => { setSelectedBrief(null); setSelectedIds(prev => { const s = new Set(prev); s.delete(selectedBrief.id); return s; }); }}
+              onClose={() => { setSelectedBrief(null); setSelectedIds(prev => { const s = new Set(prev); s.delete(selectedBrief.id); return s; }); setPanelFocusMeta(false); }}
               activeTab={panelState.activeTab}
               messageFilter={panelState.messageFilter}
               viewType="internal"
+              focusMeta={panelFocusMeta}
+              onMetaBlur={() => setPanelFocusMeta(false)}
             />
           )}
         </AnimatePresence>
       </div>
 
-      {/* Context Menu */}
+      {/* Context menu: same handlers as side panel (actions/briefActions, actions/folderActions) */}
       <AnimatePresence>
-        {contextMenu && (
-          <ContextMenu
-            x={contextMenu.x}
-            y={contextMenu.y}
-            onClose={() => setContextMenu(null)}
-            items={[
-              ...(contextMenu.type === 'canvas' ? [
-                { label: 'New folder', onClick: () => createFolder(pod.id, 'New folder', { x: 200, y: 200 }) }
-              ] : []),
-              ...(contextMenu.type === 'folder' && contextMenu.id ? [
-                { label: 'Move briefs here', onClick: () => selectedIds.forEach(id => moveBriefToFolder(id, contextMenu.id)), disabled: selectedIds.size === 0 },
-                { label: 'Delete folder', onClick: () => deleteFolder(contextMenu.id!), danger: true }
-              ] : []),
-              ...(contextMenu.type === 'brief' && contextMenu.id ? [
-                { label: 'Remove from folder', onClick: () => moveBriefToFolder(contextMenu.id!, undefined) },
-                { label: 'Delete brief', onClick: () => deleteBrief(contextMenu.id!), danger: true }
-              ] : [])
-            ].filter(Boolean) as MenuItem[]}
-          />
-        )}
+        {contextMenu && (() => {
+          const closeMenu = () => setContextMenu(null);
+          if (contextMenu.type === 'canvas') {
+            return (
+              <ContextMenu
+                x={contextMenu.x}
+                y={contextMenu.y}
+                onClose={closeMenu}
+                items={getCanvasContextMenuItems(
+                  { createFolder, updateFolderName, deleteFolder, moveBriefToFolder },
+                  pod.id,
+                  { newFolder: () => {}, closeMenu }
+                )}
+              />
+            );
+          }
+          if (contextMenu.type === 'folder' && contextMenu.id) {
+            const folder = folders.find(f => f.id === contextMenu.id)!;
+            return (
+              <ContextMenu
+                x={contextMenu.x}
+                y={contextMenu.y}
+                onClose={closeMenu}
+                items={getFolderContextMenuItems(
+                  folder,
+                  { createFolder, updateFolderName, deleteFolder, moveBriefToFolder },
+                  pod.id,
+                  {
+                    openFolder: () => { setSelectedBrief(null); setSelectedIds(new Set([folder.id])); },
+                    newFolder: () => {},
+                    moveBriefsHere: () => { Array.from(selectedIds).forEach(id => moveBriefToFolder(id, contextMenu.id!)); },
+                    closeMenu,
+                  },
+                  Array.from(selectedIds)
+                )}
+              />
+            );
+          }
+          if (contextMenu.type === 'brief' && contextMenu.id) {
+            const brief = briefs.find(b => b.id === contextMenu.id)!;
+            return (
+              <ContextMenu
+                x={contextMenu.x}
+                y={contextMenu.y}
+                onClose={closeMenu}
+                items={getBriefContextMenuItems(
+                  brief,
+                  { assignBrief, updateBriefStatus, addMessage: actions.addMessage, addDeliverable: actions.addDeliverable, updateBriefMeta, updateBriefTitle, moveBriefToFolder, deleteBrief },
+                  { currentUser, checkPermission },
+                  {
+                    openDetails: () => { setSelectedBrief(brief); setPanelState({ activeTab: 'details' }); setSelectedIds(new Set([brief.id])); },
+                    openMessagesClient: () => { setSelectedBrief(brief); setPanelState({ activeTab: 'messages', messageFilter: 'client' }); setSelectedIds(new Set([brief.id])); },
+                    openMessagesPod: () => { setSelectedBrief(brief); setPanelState({ activeTab: 'messages', messageFilter: 'internal' }); setSelectedIds(new Set([brief.id])); },
+                    openProperties: () => { setSelectedBrief(brief); setPanelState({ activeTab: 'details' }); setSelectedIds(new Set([brief.id])); setPanelFocusMeta(true); },
+                    openDelivery: () => { setSelectedBrief(brief); setPanelState({ activeTab: 'details' }); setSelectedIds(new Set([brief.id])); },
+                    closeMenu,
+                  }
+                )}
+              />
+            );
+          }
+          return null;
+        })()}
       </AnimatePresence>
     </div>
   );

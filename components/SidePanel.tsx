@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Send as SendIcon, FileText, CheckCircle2, Lock, Globe } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Send as SendIcon, FileText, CheckCircle2, Lock, Globe, Calendar, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brief, Brand, COLORS } from '../types';
 import { useUser } from '../contexts/UserContext';
@@ -13,6 +13,9 @@ interface SidePanelProps {
   activeTab?: 'details' | 'messages';
   messageFilter?: 'internal' | 'client';
   viewType: 'client' | 'internal';
+  onClientSendMessage?: (briefId: string, text: string) => Promise<void>;
+  focusMeta?: boolean;
+  onMetaBlur?: () => void;
 }
 
 export const SidePanel: React.FC<SidePanelProps> = ({ 
@@ -21,15 +24,20 @@ export const SidePanel: React.FC<SidePanelProps> = ({
     onClose, 
     activeTab, 
     messageFilter, 
-    viewType 
+    viewType,
+    onClientSendMessage,
+    focusMeta = false,
+    onMetaBlur
 }) => {
   const { currentUser, checkPermission } = useUser();
   const { 
     assignBrief, 
     updateBriefStatus, 
     addMessage, 
-    addDeliverable
+    addDeliverable,
+    updateBriefMeta
   } = useActions();
+  const metaRef = useRef<HTMLDivElement>(null);
 
   const [messageInput, setMessageInput] = useState('');
   const [msgVisibility, setMsgVisibility] = useState<'client' | 'internal'>('internal');
@@ -43,12 +51,24 @@ export const SidePanel: React.FC<SidePanelProps> = ({
     }
   }, [messageFilter, viewType]);
 
+  useEffect(() => {
+    if (focusMeta && metaRef.current) {
+      metaRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      onMetaBlur?.();
+    }
+  }, [focusMeta, onMetaBlur]);
+
   if (!brief) return null;
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!messageInput.trim()) return;
-    addMessage(brief.id, messageInput, msgVisibility);
-    setMessageInput('');
+    if (viewType === 'client' && onClientSendMessage) {
+      await onClientSendMessage(brief.id, messageInput.trim());
+      setMessageInput('');
+    } else {
+      addMessage(brief.id, messageInput, msgVisibility);
+      setMessageInput('');
+    }
   };
 
   const handleUploadFile = (files: File[]) => {
@@ -82,8 +102,8 @@ export const SidePanel: React.FC<SidePanelProps> = ({
         initial={{ width: 0, opacity: 0 }}
         animate={{ width: 400, opacity: 1 }}
         exit={{ width: 0, opacity: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="h-full bg-white/85 backdrop-blur-3xl border-l border-white/20 shadow-2xl flex flex-col z-30 shrink-0 overflow-hidden"
+        transition={{ duration: 0.15, ease: [0.25, 0.1, 0.25, 1] }}
+        className="h-full bg-white border-l border-gray-100 flex flex-col z-30 shrink-0 overflow-hidden"
     >
       <div className="w-[400px] p-6 h-full flex flex-col overflow-y-auto no-scrollbar">
         {/* Header */}
@@ -129,6 +149,28 @@ export const SidePanel: React.FC<SidePanelProps> = ({
           </div>
         )}
 
+        {/* Properties / Meta (internal only) */}
+        {viewType === 'internal' && (
+          <div ref={metaRef} className="mb-6">
+            <h3 className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-3">Properties</h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Calendar size={14} className="text-gray-400" />
+                <input
+                  type="date"
+                  className="flex-1 px-3 py-2 text-sm border border-gray-100 rounded-lg outline-none focus:border-gray-200"
+                  value={brief.deadline ? new Date(brief.deadline).toISOString().slice(0, 10) : ''}
+                  onChange={(e) => updateBriefMeta(brief.id, { deadline: e.target.value ? new Date(e.target.value) : null })}
+                />
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <User size={14} className="text-gray-400" />
+                <span>{brief.ownerName || 'Unassigned'}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="w-full h-px bg-black/5 mb-6" />
 
         {/* Deliverables Zone */}
@@ -155,7 +197,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
              )}
 
              <div className="space-y-2">
-                {brief.files.filter(f => f.type === 'deliverable').map(file => (
+                {brief.files.filter(f => f.type === 'deliverable' && (viewType === 'internal' || f.visibleToClient)).map(file => (
                     <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:shadow-sm transition-all group">
                         <div className="flex items-center gap-3 overflow-hidden">
                             <CheckCircle2 size={16} className="text-green-500 shrink-0" />

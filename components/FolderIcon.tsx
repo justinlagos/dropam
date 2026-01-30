@@ -30,20 +30,21 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
     <motion.div
       drag
       dragMomentum={false}
+      dragElastic={0}
       onDragEnd={onDragEnd}
       style={style}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
-      whileHover={{ scale: 1.05 }}
-      whileDrag={{ scale: 1.1, zIndex: 100, cursor: 'grabbing' }}
+      whileHover={{ scale: 1.02 }}
+      whileDrag={{ scale: 1.02, zIndex: 100, cursor: 'grabbing' }}
       animate={isTarget ? { scale: 1.1 } : { scale: 1 }}
-      className={`draggable-item absolute w-[120px] h-[120px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-xl transition-colors
-         ${selected ? 'bg-blue-50/50' : ''}
+      className={`draggable-item absolute w-[120px] h-[120px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-xl transition-all duration-150 ease-out
+         ${selected ? 'bg-gray-100/80 ring-1 ring-gray-200' : 'hover:bg-gray-50/80'}
       `}
     >
-      <div className={`relative w-16 h-14 flex items-center justify-center mb-1 rounded-xl transition-all duration-200 pointer-events-none
-        ${selected ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''}
+      <div className={`relative w-16 h-14 flex items-center justify-center mb-1 rounded-xl transition-all duration-150 ease-out pointer-events-none
+        ${selected ? 'ring-1 ring-gray-300' : ''}
         ${isTarget ? 'ring-4 ring-blue-300 bg-blue-50' : ''}
       `}>
         <FolderIconSvg 
@@ -58,7 +59,7 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
           </div>
         )}
       </div>
-      <span className={`text-[12px] font-medium text-center w-full truncate px-2 rounded transition-colors pointer-events-none ${selected ? 'text-blue-600' : 'text-[#111111]'}`}>
+      <span className="text-[12px] font-medium text-center w-full truncate px-2 rounded transition-colors pointer-events-none text-[#111111]">
         {folder.name}
       </span>
     </motion.div>

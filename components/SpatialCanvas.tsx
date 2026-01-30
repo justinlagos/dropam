@@ -8,13 +8,6 @@ interface SpatialCanvasProps {
   onCanvasContextMenu?: (e: React.MouseEvent) => void;
 }
 
-// Mock Cursors for "Live Presence"
-const MOCK_CURSORS = [
-    { id: 'c1', name: 'Ade', color: '#FF3B30' },
-    { id: 'c2', name: 'Sarah', color: '#007AFF' },
-    { id: 'c3', name: 'Mike', color: '#34C759' },
-];
-
 export const SpatialCanvas: React.FC<SpatialCanvasProps> = ({ 
     children, 
     onLassoSelect, 
@@ -25,21 +18,7 @@ export const SpatialCanvas: React.FC<SpatialCanvasProps> = ({
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
-  const [cursors, setCursors] = useState<{id: string, x: number, y: number}[]>([]);
   const [selectionBox, setSelectionBox] = useState<{ startX: number, startY: number, currentX: number, currentY: number } | null>(null);
-
-  // Live Cursor Simulation
-  useEffect(() => {
-    const interval = setInterval(() => {
-        setCursors(MOCK_CURSORS.map(c => ({
-            id: c.id,
-            // Random walk around center
-            x: (window.innerWidth / 2) + (Math.random() - 0.5) * 800,
-            y: (window.innerHeight / 2) + (Math.random() - 0.5) * 600
-        })));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Keyboard Listeners (Space for Pan)
   useEffect(() => {
@@ -57,14 +36,27 @@ export const SpatialCanvas: React.FC<SpatialCanvasProps> = ({
     };
   }, []);
 
-  // Zoom Handler (Wheel)
+  // Zoom Handler (Wheel) - zoom centered on cursor
   const handleWheel = (e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
-       // Zoom
        e.preventDefault();
-       const zoomSensitivity = 0.001;
-       const newScale = Math.min(Math.max(0.2, transform.scale - e.deltaY * zoomSensitivity), 3);
-       setTransform(prev => ({ ...prev, scale: newScale }));
+       const zoomSensitivity = 0.002;
+       const delta = -e.deltaY * zoomSensitivity;
+       const newScale = Math.min(Math.max(0.2, transform.scale + delta), 3);
+       const rect = containerRef.current?.getBoundingClientRect();
+       if (rect) {
+         const mouseX = e.clientX - rect.left;
+         const mouseY = e.clientY - rect.top;
+         const scaleFactor = newScale / transform.scale;
+         setTransform(prev => ({
+           ...prev,
+           scale: newScale,
+           x: prev.x - (mouseX - prev.x) * (scaleFactor - 1),
+           y: prev.y - (mouseY - prev.y) * (scaleFactor - 1)
+         }));
+       } else {
+         setTransform(prev => ({ ...prev, scale: newScale }));
+       }
     } else if (isSpacePressed) {
        // Pan via wheel if space is pressed
        setTransform(prev => ({
@@ -158,7 +150,7 @@ export const SpatialCanvas: React.FC<SpatialCanvasProps> = ({
 
   return (
     <div 
-        className={`w-full h-full overflow-hidden relative bg-[#F5F5F7] ${isSpacePressed ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
+        className={`w-full h-full overflow-hidden relative bg-white ${isSpacePressed ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -175,7 +167,7 @@ export const SpatialCanvas: React.FC<SpatialCanvasProps> = ({
                 y: transform.y,
                 scale: transform.scale
             }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            transition={{ duration: 0 }}
         >
             {/* Render Items */}
             {children}
@@ -193,29 +185,6 @@ export const SpatialCanvas: React.FC<SpatialCanvasProps> = ({
                 />
             )}
         </motion.div>
-        
-        {/* Live Cursors Overlay */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-             {cursors.map(c => (
-                 <motion.div 
-                    key={c.id}
-                    className="absolute flex items-center gap-2"
-                    initial={{ x: c.x, y: c.y, opacity: 0 }}
-                    animate={{ x: c.x, y: c.y, opacity: 1 }}
-                    transition={{ duration: 2, ease: "easeInOut" }}
-                 >
-                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0.500002 1.19177L11.7841 12.3673H5.65376Z" fill={MOCK_CURSORS.find(mc => mc.id === c.id)?.color} stroke="white"/>
-                     </svg>
-                     <div 
-                        className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white shadow-sm"
-                        style={{ backgroundColor: MOCK_CURSORS.find(mc => mc.id === c.id)?.color }}
-                     >
-                         {MOCK_CURSORS.find(mc => mc.id === c.id)?.name}
-                     </div>
-                 </motion.div>
-             ))}
-        </div>
         
         {/* Controls Hint */}
         <div className="absolute bottom-6 left-6 text-xs text-gray-400 font-medium pointer-events-none">

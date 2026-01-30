@@ -58,6 +58,7 @@ export const NoAccessPage: React.FC = () => {
   };
 
   const isClient = currentUser.role === 'client';
+  const clientNoBrand = isClient && !currentUser.brandId;
 
   return (
     <div className="min-h-screen bg-[#F5F5F7] flex flex-col items-center justify-center p-8 font-sans">
@@ -119,7 +120,12 @@ export const NoAccessPage: React.FC = () => {
                     <h2 className="font-bold">Client Drops</h2>
                 </div>
 
-                {loading ? (
+                {clientNoBrand ? (
+                    <div className="flex-1 flex flex-col items-center justify-center min-h-[120px] text-center">
+                        <p className="text-sm text-gray-600">Your account isn&apos;t assigned to a brand yet.</p>
+                        <p className="text-xs text-gray-400 mt-2">Contact your Creative Director to get access.</p>
+                    </div>
+                ) : loading ? (
                     <div className="h-20 flex items-center justify-center text-xs text-gray-400">Loading Brands...</div>
                 ) : brands.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center min-h-[120px]">
@@ -130,7 +136,7 @@ export const NoAccessPage: React.FC = () => {
                     </div>
                 ) : (
                     <div className="space-y-2">
-                        {brands.map(brand => (
+                        {(isClient ? brands.filter(b => b.id === currentUser.brandId) : brands).map(brand => (
                             <Link 
                                 key={brand.id} 
                                 to={`/drop/${brand.slug}`}

@@ -21,6 +21,8 @@ interface ActionContextType {
   deleteFolder: (folderId: string) => void;
   stackBriefs: (targetBriefId: string, sourceBriefId: string) => void;
   unstackBrief: (briefId: string, newPosition: { x: number; y: number }) => void;
+  updateBriefTitle: (briefId: string, title: string) => void;
+  updateFolderName: (folderId: string, name: string) => void;
 }
 
 const ActionContext = createContext<ActionContextType | undefined>(undefined);
@@ -79,7 +81,11 @@ export const ActionProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const updateBriefStatus = useCallback(async (briefId: string, status: BriefStatus) => {
     await supabase.from('briefs').update({ status }).eq('id', briefId);
-  }, []);
+    if (status === 'delivered') {
+      await supabase.from('brief_files').update({ visible_to_client: true }).eq('brief_id', briefId).eq('type', 'deliverable');
+      setBriefs(prev => prev.map(b => b.id === briefId ? { ...b, status, files: b.files.map(f => f.type === 'deliverable' ? { ...f, visibleToClient: true } : f) } : b));
+    }
+  }, [setBriefs]);
 
   const updateBriefPosition = useCallback(async (briefId: string, position: { x: number; y: number }) => {
     setBriefs(prev => prev.map(b => b.id === briefId ? { ...b, position } : b));
@@ -117,7 +123,9 @@ export const ActionProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (!currentUser) return;
     await supabase.from('messages').insert({
         brief_id: briefId,
+        author_id: currentUser.id,
         author_name: currentUser.role === 'client' ? 'Client' : currentUser.name,
+        author_type: currentUser.role === 'client' ? 'client' : 'user',
         text,
         visibility
     });
@@ -201,6 +209,16 @@ export const ActionProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }).eq('id', briefId);
   }, []);
 
+  const updateBriefTitle = useCallback(async (briefId: string, title: string) => {
+    setBriefs(prev => prev.map(b => b.id === briefId ? { ...b, title } : b));
+    await supabase.from('briefs').update({ title }).eq('id', briefId);
+  }, [setBriefs]);
+
+  const updateFolderName = useCallback(async (folderId: string, name: string) => {
+    setFolders(prev => prev.map(f => f.id === folderId ? { ...f, name } : f));
+    await supabase.from('folders').update({ name }).eq('id', folderId);
+  }, [setFolders]);
+
   return (
     <ActionContext.Provider value={{
       addBrief,
@@ -218,7 +236,9 @@ export const ActionProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       deleteBrief,
       deleteFolder,
       stackBriefs,
-      unstackBrief
+      unstackBrief,
+      updateBriefTitle,
+      updateFolderName
     }}>
       {children}
     </ActionContext.Provider>

@@ -15,12 +15,13 @@ create extension if not exists "uuid-ossp";
 -- 0. Profiles (Real Auth)
 create table public.profiles (
   id uuid references auth.users(id) on delete cascade primary key,
-  role text default 'creative',
+  role text default 'pod_member' check (role in ('client', 'pod_member', 'pod_lead', 'admin')),
   pod_id uuid,
   brand_id uuid,
   name text,
   email text,
-  preferences jsonb
+  preferences jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
 -- 1. Create Tables
@@ -30,15 +31,23 @@ create table public.pods (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   name text not null,
   slug text not null unique,
-  lead_name text
+  description text,
+  lead_name text,
+  lead_id uuid references public.profiles(id) on delete set null,
+  archived_at timestamp with time zone
 );
 
 create table public.brands (
   id uuid default gen_random_uuid() primary key,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()),
   name text not null,
   slug text not null unique,
-  pod_id uuid references public.pods(id) on delete cascade
+  pod_id uuid references public.pods(id) on delete cascade,
+  access_key_hash text,
+  is_active boolean default true not null,
+  notification_email text,
+  archived_at timestamp with time zone
 );
 
 create table public.folders (
@@ -75,7 +84,8 @@ create table public.brief_files (
   name text not null,
   type text not null, 
   url text not null,
-  brief_id uuid references public.briefs(id) on delete cascade
+  brief_id uuid references public.briefs(id) on delete cascade,
+  visible_to_client boolean default false not null
 );
 
 create table public.messages (
@@ -83,6 +93,8 @@ create table public.messages (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   text text not null,
   author_name text not null,
+  author_id uuid references public.profiles(id) on delete set null,
+  author_type text default 'user' check (author_type in ('user', 'client')),
   visibility text default 'internal', 
   brief_id uuid references public.briefs(id) on delete cascade
 );
@@ -109,4 +121,5 @@ create policy "Public messages" on public.messages for all using (true) with che
 -- 3. Storage
 insert into storage.buckets (id, name, public) values ('brief-assets', 'brief-assets', true)
 on conflict (id) do nothing;
+drop policy if exists "Public Access" on storage.objects;
 create policy "Public Access" on storage.objects for all using ( bucket_id = 'brief-assets' ) with check ( bucket_id = 'brief-assets' );

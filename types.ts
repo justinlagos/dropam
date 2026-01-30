@@ -1,5 +1,5 @@
 export type BriefStatus = 'new' | 'in_progress' | 'review' | 'delivered';
-export type UserRole = 'admin' | 'pod_lead' | 'creative' | 'client';
+export type UserRole = 'admin' | 'pod_lead' | 'pod_member' | 'client';
 export type Priority = 'normal' | 'urgent';
 
 export interface UserPreferences {
@@ -13,13 +13,22 @@ export interface Brand {
   name: string;
   slug: string;
   podId: string;
+  accessKeyHash?: string | null;
+  isActive?: boolean;
+  notificationEmail?: string | null;
+  archivedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Pod {
   id: string;
   name: string;
   slug: string;
-  leadName: string;
+  description?: string | null;
+  leadName?: string;
+  leadId?: string;
+  archivedAt?: string | null;
 }
 
 export interface User {
@@ -38,7 +47,8 @@ export interface Message {
   authorName: string;
   text: string;
   visibility: 'internal' | 'client';
-  createdAt: string; 
+  authorType?: 'user' | 'client';
+  createdAt: string;
 }
 
 export interface FileAttachment {
@@ -46,7 +56,8 @@ export interface FileAttachment {
   name: string;
   type: 'brief' | 'attachment' | 'deliverable';
   url: string;
-  uploadedAt: string; 
+  uploadedAt: string;
+  visibleToClient?: boolean;
 }
 
 export interface Folder {

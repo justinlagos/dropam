@@ -8,7 +8,16 @@ import { PodCanvasPage } from './pages/PodCanvasPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { NoAccessPage } from './pages/NoAccessPage';
 import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
 import { CommandPalette } from './components/CommandPalette';
+
+const LogoutRedirect: React.FC = () => {
+  const { signOut } = useUser();
+  React.useEffect(() => {
+    signOut().then(() => window.location.replace('/#/login'));
+  }, [signOut]);
+  return <LoadingScreen />;
+};
 import { Loader2 } from 'lucide-react';
 
 const LoadingScreen = () => (
@@ -27,28 +36,19 @@ const ProtectedRoute: React.FC<{ children: React.JSX.Element }> = ({ children })
 
 const RootRedirect: React.FC = () => {
     const { currentUser, isLoading } = useUser();
-    const { pods, brands, loading: dataLoading } = useData();
+    const { pods, loading: dataLoading } = useData();
+    const activePods = pods.filter((p: { archivedAt?: string }) => !p.archivedAt);
 
     if (isLoading || dataLoading) return <LoadingScreen />;
     if (!currentUser) return <Navigate to="/login" replace />;
 
-    // Routing Logic
-    if (currentUser.role === 'client') {
-        if (currentUser.brandId) {
-            const brand = brands.find(b => b.id === currentUser.brandId);
-            if (brand) return <Navigate to={`/drop/${brand.slug}`} replace />;
-        }
-        // If client has no brand assigned, fallback to no-access
-        return <Navigate to="/no-access" replace />; 
-    }
-
     if (currentUser.podId) {
-        const pod = pods.find(p => p.id === currentUser.podId);
+        const pod = activePods.find((p: { id: string }) => p.id === currentUser.podId);
         if (pod) return <Navigate to={`/pod/${pod.slug}`} replace />;
     }
 
-    if (currentUser.role === 'admin' && pods.length > 0) {
-         return <Navigate to={`/pod/${pods[0].slug}`} replace />;
+    if (currentUser.role === 'admin' && activePods.length > 0) {
+        return <Navigate to={`/pod/${activePods[0].slug}`} replace />;
     }
 
     return <Navigate to="/no-access" replace />;
@@ -63,10 +63,10 @@ const App: React.FC = () => {
             <CommandPalette />
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
+              <Route path="/logout" element={<LogoutRedirect />} />
               
-              <Route path="/drop/:brandSlug" element={
-                 <ProtectedRoute><ClientDropPage /></ProtectedRoute> 
-              } />
+              <Route path="/drop/:brandSlug" element={<ClientDropPage />} />
               
               <Route path="/no-access" element={
                   <ProtectedRoute><NoAccessPage /></ProtectedRoute>

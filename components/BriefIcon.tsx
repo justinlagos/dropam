@@ -62,6 +62,7 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
         <motion.div 
             drag={onDragEnd ? true : false}
             dragMomentum={false}
+            dragElastic={0}
             onDragEnd={onDragEnd}
             onClick={onClick}
             onDoubleClick={onDoubleClick}
@@ -69,18 +70,18 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             style={style}
-            whileHover={{ scale: 1.05 }}
-            whileDrag={{ scale: 1.1, zIndex: 100, cursor: 'grabbing' }}
+            whileHover={{ scale: 1.02 }}
+            whileDrag={{ scale: 1.02, zIndex: 100, cursor: 'grabbing' }}
             animate={isTarget ? { scale: 1.2 } : { scale: 1 }}
-            className={`draggable-item w-[120px] h-[140px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-2xl transition-all
-                 ${selected ? 'bg-indigo-50/50' : 'hover:bg-white/40'}
+            className={`draggable-item w-[120px] h-[140px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-2xl transition-all duration-150 ease-out
+                 ${selected ? 'bg-gray-100/80 ring-1 ring-gray-200' : 'hover:bg-gray-50/80'}
             `}
         >
-            <div className={`relative w-[68px] h-[68px] mb-4 flex items-center justify-center bg-white rounded-2xl transition-all duration-300 pointer-events-none
-                ${selected ? 'ring-2 ring-indigo-500 shadow-xl scale-105' : 'shadow-sm border border-black/5'}
+            <div className={`relative w-[68px] h-[68px] mb-4 flex items-center justify-center bg-white rounded-2xl transition-all duration-150 ease-out
+                ${selected ? 'ring-1 ring-gray-300 shadow-sm' : 'shadow-sm border border-black/5'}
                 ${isTarget ? 'ring-4 ring-green-400 shadow-2xl bg-green-50' : ''}
             `}>
-                <FileText size={30} className={selected ? 'text-indigo-600' : 'text-[#111111]'} strokeWidth={1.5} />
+                <FileText size={30} className="text-[#111111]" strokeWidth={1.5} />
                 
                 {/* Status Indicator */}
                 <div 
@@ -91,13 +92,13 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
                 />
             </div>
 
-            <div className="flex flex-col items-center text-center w-full px-2 pointer-events-none">
+            <div className="flex flex-col items-center text-center w-full px-2">
                 {showMeta && brandName && (
                 <span className="text-[8px] uppercase tracking-[0.2em] text-gray-400 mb-1 font-bold">
                     {brandName}
                 </span>
                 )}
-                <div className={`text-[11px] font-semibold leading-tight line-clamp-2 break-words max-w-full ${selected ? 'text-indigo-600' : 'text-[#111111]'}`}>
+                <div className={`text-[11px] font-semibold leading-tight line-clamp-2 break-words max-w-full ${selected ? 'text-[#111111]' : 'text-[#111111]'}`}>
                 {brief.title}
                 </div>
                 

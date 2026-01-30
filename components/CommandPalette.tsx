@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Command } from 'cmdk';
-import { Search, Briefcase, User, CheckCircle } from 'lucide-react';
+import { Search, Briefcase, User, CheckCircle, Settings, Users, Shield } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
+import { useUser } from '../contexts/UserContext';
 import { useNavigate } from 'react-router-dom';
 
 export const CommandPalette: React.FC = () => {
   const [open, setOpen] = useState(false);
   const { brands, pods } = useData();
+  const { currentUser } = useUser();
   const navigate = useNavigate();
+  const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -80,6 +83,35 @@ export const CommandPalette: React.FC = () => {
                     </Command.Item>
                 ))}
             </Command.Group>
+
+            {isAdmin && (
+              <Command.Group heading="Admin" className="text-xs font-semibold text-gray-400 mb-2 px-2 mt-2">
+                <Command.Item 
+                  value="Manage People"
+                  onSelect={() => { navigate('/settings'); setOpen(false); }}
+                  className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[#111111] hover:bg-black/5 cursor-pointer aria-selected:bg-black/5 transition-colors"
+                >
+                  <Users size={16} className="text-gray-500" />
+                  <span>Manage People</span>
+                </Command.Item>
+                <Command.Item 
+                  value="Manage Pods Assign Pod Lead"
+                  onSelect={() => { navigate('/settings'); setOpen(false); }}
+                  className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[#111111] hover:bg-black/5 cursor-pointer aria-selected:bg-black/5 transition-colors"
+                >
+                  <Shield size={16} className="text-gray-500" />
+                  <span>Assign Pod Lead</span>
+                </Command.Item>
+                <Command.Item 
+                  value="Settings"
+                  onSelect={() => { navigate('/settings'); setOpen(false); }}
+                  className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[#111111] hover:bg-black/5 cursor-pointer aria-selected:bg-black/5 transition-colors"
+                >
+                  <Settings size={16} className="text-gray-500" />
+                  <span>Settings</span>
+                </Command.Item>
+              </Command.Group>
+            )}
 
             <Command.Group heading="Actions" className="text-xs font-semibold text-gray-400 mb-2 px-2 mt-2">
                 <Command.Item 

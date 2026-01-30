@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 
@@ -10,54 +10,24 @@ export const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [localError, setLocalError] = useState<string | null>(null);
 
-  // Auto-redirect if user is detected (handled by UserContext)
   useEffect(() => {
-      if (currentUser) {
-          navigate('/');
-      }
+    if (currentUser) navigate('/');
   }, [currentUser, navigate]);
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setLocalError(null);
-
     try {
-        if (mode === 'signup') {
-            const { data, error: signUpError } = await supabase.auth.signUp({
-                email,
-                password,
-            });
-            if (signUpError) throw signUpError;
-            
-            // If signup is successful but no session, it means email confirmation is required.
-            if (data.user && !data.session) {
-                alert("Account created! Please check your email to confirm your registration.");
-                setMode('signin');
-            } else {
-                // If session exists, UserContext will pick it up and creating profile automatically.
-                // We just wait for the useEffect above to redirect us.
-            }
-
-        } else {
-            const { error } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            });
-            if (error) throw error;
-            // Success: UserContext will detect the session change and redirect.
-        }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      // Don't navigate here - useEffect will redirect when currentUser is set by UserContext
     } catch (err: any) {
-        console.error("Auth error:", err);
-        // Ignore AbortError as it usually means component unmounted (successful nav)
-        if (err.name !== 'AbortError') {
-            setLocalError(err.message || "Authentication failed");
-        }
+      if (err.name !== 'AbortError') setLocalError(err.message || 'Sign in failed');
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -65,7 +35,7 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center font-sans">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
         <h1 className="text-2xl font-bold text-[#111111] mb-2 tracking-tight">Dropam OS</h1>
-        <p className="text-sm text-gray-500 mb-8">{mode === 'signin' ? 'Sign in to your workspace' : 'Create an account'}</p>
+        <p className="text-sm text-gray-500 mb-8">Sign in to your workspace</p>
         
         {/* Context Level Error (Missing Tables) */}
         {userContextError && (
@@ -78,7 +48,7 @@ export const LoginPage: React.FC = () => {
         {/* Local Error */}
         {localError && <div className="bg-red-50 text-red-600 text-xs p-3 rounded-lg mb-4">{localError}</div>}
 
-        <form onSubmit={handleAuth} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4">
             <div>
                 <label className="text-xs font-semibold text-gray-700 block mb-1">Email</label>
                 <input 
@@ -100,16 +70,12 @@ export const LoginPage: React.FC = () => {
                 disabled={loading}
                 className="w-full h-10 bg-[#111111] text-white rounded-lg text-sm font-medium flex items-center justify-center hover:scale-[1.02] transition-transform"
             >
-                {loading ? <Loader2 className="animate-spin" size={16} /> : (mode === 'signin' ? 'Sign In' : 'Sign Up')}
+                {loading ? <Loader2 className="animate-spin" size={16} /> : 'Sign In'}
             </button>
         </form>
 
         <div className="mt-6 text-center text-xs">
-            {mode === 'signin' ? (
-                <p className="text-gray-500">No account? <button onClick={() => { setMode('signup'); setLocalError(null); }} className="text-[#111111] font-bold">Sign up</button></p>
-            ) : (
-                <p className="text-gray-500">Have an account? <button onClick={() => { setMode('signin'); setLocalError(null); }} className="text-[#111111] font-bold">Sign in</button></p>
-            )}
+          <p className="text-gray-500">No account? <Link to="/signup" className="text-[#111111] font-bold">Sign up</Link></p>
         </div>
       </div>
     </div>
