@@ -43,12 +43,21 @@ export const NoAccessPage: React.FC = () => {
           {error ? (
             <>
               <p className="text-sm text-gray-600 mb-2">Unable to load your profile.</p>
-              <p className="text-xs text-gray-400">{error}</p>
+              <p className="text-xs text-gray-400 mb-4">{error}</p>
+              {error.toLowerCase().includes('permission') && (
+                <div className="text-left text-xs text-amber-700 bg-amber-50 p-4 rounded-xl border border-amber-200">
+                  <p className="font-semibold mb-2">Database setup required</p>
+                  <p className="text-amber-600">Run the RLS fix in Supabase SQL Editor:</p>
+                  <code className="block mt-2 p-2 bg-white rounded text-[10px] font-mono border border-amber-200">
+                    supabase/fix_all_rls.sql
+                  </code>
+                </div>
+              )}
             </>
           ) : (
             <>
               <p className="text-sm text-gray-600 mb-2">You don't have access to a POD yet.</p>
-              <p className="text-xs text-gray-400">Contact your admin to get access to your workspace.</p>
+              <p className="text-xs text-gray-400">Contact your admin to get assigned to a workspace.</p>
             </>
           )}
         </div>
