@@ -121,11 +121,12 @@ export const ActionProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const addMessage = useCallback(async (briefId: string, text: string, visibility: 'internal' | 'client') => {
     if (!currentUser) return;
+    // Internal users only (admin, pod_lead, pod_member) - clients use clientApi
     await supabase.from('messages').insert({
         brief_id: briefId,
         author_id: currentUser.id,
-        author_name: currentUser.role === 'client' ? 'Client' : currentUser.name,
-        author_type: currentUser.role === 'client' ? 'client' : 'user',
+        author_name: currentUser.name,
+        author_type: 'user',
         text,
         visibility
     });

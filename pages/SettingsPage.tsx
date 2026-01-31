@@ -173,7 +173,15 @@ export const SettingsPage: React.FC = () => {
       setLoading(false);
   };
 
+  const [roleError, setRoleError] = useState<string | null>(null);
+
   const handleUpdateRole = async (userId: string, newRole: string) => {
+      // Block client role - clients are brands, not internal users
+      if (newRole === 'client') {
+        setRoleError('Clients access via brand drop links, not internal accounts.');
+        setTimeout(() => setRoleError(null), 3000);
+        return;
+      }
       await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
       fetchProfiles();
   };
@@ -343,9 +351,17 @@ export const SettingsPage: React.FC = () => {
                         <Users size={18} />
                         <h2 className="font-bold">Manage People</h2>
                     </div>
-                    
+
+                    {/* Role error toast */}
+                    {roleError && (
+                      <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-lg">
+                        {roleError}
+                      </div>
+                    )}
+
                     <div className="space-y-4">
-                        {profiles.map(user => (
+                        {/* Filter out any legacy client profiles - they shouldn't exist */}
+                        {profiles.filter(u => u.role !== 'client').map(user => (
                             <div key={user.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-gray-50 rounded-xl">
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium truncate">{user.name || user.email}</p>
@@ -353,44 +369,29 @@ export const SettingsPage: React.FC = () => {
                                 </div>
                                 
                                 <div className="flex flex-wrap gap-2">
-                                    {/* Role Selector */}
-                                    <select 
-                                        value={user.role}
+                                    {/* Role Selector - Internal roles only (no client) */}
+                                    <select
+                                        value={user.role === 'client' ? 'pod_member' : user.role}
                                         onChange={(e) => handleUpdateRole(user.id, e.target.value)}
                                         className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1 outline-none"
                                     >
                                         <option value="admin">Admin</option>
                                         <option value="pod_lead">Pod Lead</option>
                                         <option value="pod_member">Pod Member</option>
-                                        <option value="client">Client</option>
                                     </select>
 
-                                    {/* Pod Selector (for creatives) */}
-                                    {user.role !== 'client' && (
-                                <select
-                                    value={user.pod_id || ''}
-                                    onChange={(e) => handleUpdatePod(user.id, e.target.value)}
-                                    className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1 outline-none max-w-[100px]"
-                                >
-                                    <option value="">No Pod</option>
-                                    {activePods(pods).map(pod => (
-                                        <option key={pod.id} value={pod.id}>{pod.name}</option>
-                                    ))}
-                                </select>
-                                    )}
-
-                                    {/* Brand Selector (for clients) */}
-                                    {user.role === 'client' && (
-                                        <select
-                                            value={user.brand_id || ''}
-                                            onChange={(e) => handleUpdateBrand(user.id, e.target.value)}
-                                            className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1 outline-none max-w-[100px]"
-                                        >
-                                            <option value="">No Brand</option>
-                                            {activeBrands(brands).map(brand => (
-                                                <option key={brand.id} value={brand.id}>{brand.name}</option>
-                                            ))}
-                                        </select>
+                                    {/* Pod Selector - Show for pod_lead and pod_member only (admin doesn't need pod) */}
+                                    {(user.role === 'pod_lead' || user.role === 'pod_member') && (
+                                      <select
+                                          value={user.pod_id || ''}
+                                          onChange={(e) => handleUpdatePod(user.id, e.target.value)}
+                                          className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1 outline-none max-w-[100px]"
+                                      >
+                                          <option value="">No Pod</option>
+                                          {activePods(pods).map(pod => (
+                                              <option key={pod.id} value={pod.id}>{pod.name}</option>
+                                          ))}
+                                      </select>
                                     )}
                                 </div>
                             </div>

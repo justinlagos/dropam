@@ -36,57 +36,74 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const handleUserSession = async (sessionUser: any) => {
-    const fallbackUser = {
+    const fallbackUser: User = {
       id: sessionUser.id,
       email: sessionUser.email || '',
       name: sessionUser.email?.split('@')[0] || 'User',
       role: 'pod_member' as const,
+      podId: undefined,
+      brandId: undefined,
     };
     try {
         setError(null);
-        
+
         // 1. Fetch Profile
         let { data: profile, error: fetchError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', sessionUser.id)
             .single();
-        
-        if (fetchError && fetchError.code === '42P01') {
-            const msg = "Database tables missing. Run supabase_schema.sql";
-            console.error(msg);
-            setError(msg);
-            setCurrentUser({ ...fallbackUser, podId: undefined, brandId: undefined });
-            return;
+
+        // Handle specific database errors gracefully (no alert popups)
+        if (fetchError) {
+            if (fetchError.code === '42P01') {
+                // Tables missing
+                setError('Database tables not found. Contact admin.');
+                setCurrentUser(fallbackUser);
+                return;
+            }
+            if (fetchError.code === '42501' || fetchError.message?.includes('permission') || fetchError.message?.includes('policy')) {
+                // Permission denied - RLS issue
+                setError('Permission denied. Database policies may need to be applied.');
+                setCurrentUser(fallbackUser);
+                return;
+            }
+            // PGRST116 = no rows found, which is fine - we'll create the profile
+            if (fetchError.code !== 'PGRST116') {
+                console.error('Profile fetch error:', fetchError);
+            }
         }
-        
-        // 2. Self-Heal: If profile is missing (auth exists, but db row doesn't), create it.
-        // We ignore 'PGRST116' which is "Result contains 0 rows" - meaning we need to create one.
+
+        // 2. Self-Heal: If profile is missing, create it with pod_member role
+        // Note: Clients never log in - they use brand drop links with access keys
         if (!profile) {
             const meta = sessionUser.user_metadata || {};
-            const role = meta.role === 'client' ? 'client' : 'pod_member';
-            const insertRow: Record<string, any> = {
+            const insertRow = {
                 id: sessionUser.id,
                 email: sessionUser.email,
-                role,
+                role: 'pod_member', // Always pod_member for new internal users
                 name: meta.name || sessionUser.email?.split('@')[0] || 'User'
             };
-            if (role === 'client' && meta.brand_id) insertRow.brand_id = meta.brand_id;
             const { data: newProfile, error: createError } = await supabase
                 .from('profiles')
                 .insert(insertRow)
                 .select()
                 .single();
-            
+
             if (createError) {
-                console.error("Failed to auto-create profile:", createError);
-                // If the error is not duplicate key (23505), report it
-                if (createError.code !== '23505') {
-                   setError("Failed to create user profile.");
+                console.error('Failed to auto-create profile:', createError);
+                if (createError.code === '23505') {
+                    // Duplicate key - another request created it, fetch again
+                    const { data: retryProfile } = await supabase.from('profiles').select('*').eq('id', sessionUser.id).single();
+                    profile = retryProfile;
+                } else if (createError.code === '42501' || createError.message?.includes('permission')) {
+                    setError('Permission denied creating profile. Contact admin.');
+                    setCurrentUser(fallbackUser);
+                    return;
                 } else {
-                   // If duplicate key, it means another request beat us to it. Fetch again.
-                   const { data: retryProfile } = await supabase.from('profiles').select('*').eq('id', sessionUser.id).single();
-                   profile = retryProfile;
+                    setError('Failed to create user profile.');
+                    setCurrentUser(fallbackUser);
+                    return;
                 }
             } else {
                 profile = newProfile;
@@ -96,13 +113,13 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (profile) {
             setCurrentUser(mapProfileToUser(profile, sessionUser));
         } else {
-            setCurrentUser({ ...fallbackUser, podId: undefined, brandId: undefined });
+            setCurrentUser(fallbackUser);
         }
 
     } catch (e: any) {
-        console.error("Session handling error:", e);
-        setError(e.message);
-        setCurrentUser({ ...fallbackUser, podId: undefined, brandId: undefined });
+        console.error('Session handling error:', e);
+        setError(e.message || 'An unexpected error occurred.');
+        setCurrentUser(fallbackUser);
     }
   };
 
@@ -215,6 +232,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!currentUser) return false;
     const { role, id } = currentUser;
 
+    // Internal roles only: admin, pod_lead, pod_member
+    // Clients don't log in - they use brand drop links
     switch (action) {
       case 'reassign_brief':
       case 'set_deadline':
@@ -223,9 +242,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       case 'manage_users':
         return role === 'admin';
       case 'view_internal_notes':
-        return role !== 'client';
+        return role === 'admin' || role === 'pod_lead' || role === 'pod_member';
       case 'take_brief':
-        return role !== 'client';
+        return role === 'admin' || role === 'pod_lead' || role === 'pod_member';
       case 'deliver_brief':
         // Owner, Lead, or Admin can deliver
         return role === 'admin' || role === 'pod_lead' || id === resourceOwnerId;
