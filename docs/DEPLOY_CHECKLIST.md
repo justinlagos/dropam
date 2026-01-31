@@ -13,13 +13,14 @@ supabase db push
 # - 003_client_folders.sql
 ```
 
-### 2. Deploy Edge Functions
-Brand access keys require **client-verify**, **client-briefs**, and **client-messages**.
+### 2. Deploy Edge Functions (required for brand access keys)
+If clients get "Invalid access key", deploy all three functions:
 ```bash
 supabase functions deploy client-verify
 supabase functions deploy client-briefs
 supabase functions deploy client-messages
 ```
+After deploying, existing brands may need a key rotation: Settings → Brands → Rotate for each brand.
 
 ### 3. Enable Realtime (optional but recommended)
 In Supabase Dashboard → Database → Replication:

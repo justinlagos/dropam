@@ -27,11 +27,17 @@ export async function validateBrandAccess(
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+  // Normalize: trim and lowercase slug for case-insensitive lookup
+  const slug = String(brandSlug ?? "").trim().toLowerCase();
+  if (!slug) return { error: "Brand not found" };
+
+  // Use ilike for case-insensitive slug match (handles Sparkle vs sparkle)
   const { data: brand, error: brandError } = await supabase
     .from("brands")
     .select("id, slug, pod_id, access_key_hash, is_active, archived_at")
-    .eq("slug", brandSlug)
-    .single();
+    .ilike("slug", slug)
+    .limit(1)
+    .maybeSingle();
 
   if (brandError || !brand) {
     return { error: "Brand not found" };
@@ -46,8 +52,13 @@ export async function validateBrandAccess(
     return { error: "Brand has no access key configured" };
   }
 
-  const hash = await hashAccessKey(accessKey);
-  if (hash !== brand.access_key_hash) {
+  // Normalize key: trim and remove any non-printable/control characters
+  const key = String(accessKey ?? "").trim().replace(/[\x00-\x1F\x7F]/g, "");
+  if (!key) return { error: "Invalid access key" };
+
+  const hash = await hashAccessKey(key);
+  const storedHash = String(brand.access_key_hash ?? "").trim();
+  if (hash !== storedHash) {
     return { error: "Invalid access key" };
   }
 

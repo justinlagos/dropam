@@ -43,7 +43,10 @@ export async function verifyBrandAccess(brandSlug: string, accessKey: string): P
       body: JSON.stringify({ brandSlug: brandSlug?.trim(), accessKey: key }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: (data as any).error ?? 'Invalid access key' };
+    if (!res.ok) {
+      const msg = (data as any).error ?? (res.status === 404 ? 'Server not configured. Deploy client-verify Edge Function.' : 'Invalid access key');
+      return { ok: false, error: msg };
+    }
     return { ok: true };
   } catch (err: any) {
     return { ok: false, error: err?.message?.includes('fetch') ? 'Network error. Check your connection.' : 'Invalid access key' };

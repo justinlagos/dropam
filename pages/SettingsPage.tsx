@@ -236,9 +236,10 @@ export const SettingsPage: React.FC = () => {
   const handleCreateBrand = async (name: string, slug: string, podId: string, notificationEmail: string) => {
       const rawKey = generateAccessKey();
       const accessKeyHash = await hashAccessKey(rawKey);
+      const brandSlug = (slug || slugFromName(name)).toLowerCase().trim();
       const { data, error } = await supabase.from('brands').insert({
           name,
-          slug: slug || slugFromName(name),
+          slug: brandSlug,
           pod_id: podId,
           access_key_hash: accessKeyHash,
           is_active: true,
@@ -246,7 +247,7 @@ export const SettingsPage: React.FC = () => {
       }).select().single();
       if (!error && data) {
           setBrands(prev => [...prev, { id: data.id, name: data.name, slug: data.slug, podId: data.pod_id }]);
-          setNewKeyReveal({ brandId: data.id, slug: data.slug, key: rawKey });
+          setNewKeyReveal({ brandId: data.id, slug: brandSlug, key: rawKey });
       }
   };
 
@@ -455,7 +456,7 @@ export const SettingsPage: React.FC = () => {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setNewKeyReveal(null)}>
               <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-gray-100" onClick={e => e.stopPropagation()}>
                 <h3 className="font-bold text-[#111111] mb-2">Access key (show once)</h3>
-                <p className="text-xs text-gray-500 mb-4">Copy and share with the client. It cannot be retrieved later.</p>
+                <p className="text-xs text-gray-500 mb-4">Use &quot;Copy link&quot; to share the full URL—the client opens it directly without typing the key.</p>
                 <div className="flex flex-wrap gap-2 mb-4">
                   <button type="button" onClick={() => copyToClipboard(dropLink(newKeyReveal.slug, newKeyReveal.key))} className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg text-sm font-medium hover:bg-gray-200">
                     <Copy size={14} /> Copy link
