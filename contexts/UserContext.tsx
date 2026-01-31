@@ -102,20 +102,37 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     let mounted = true;
+    let profileLoaded = false;
 
     const syncSession = async (session: any) => {
       if (!mounted || !session?.user) return;
+
+      // Set up timeout - but don't reject, just log
+      const timeoutId = setTimeout(() => {
+        if (!profileLoaded) {
+          console.warn("Profile fetch taking longer than expected...");
+        }
+      }, 5000);
+
       try {
-        await Promise.race([
-          handleUserSession(session.user),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
-        ]);
-      } catch (e) {
-        if (mounted) {
-          const fallback = { id: session.user.id, email: session.user.email || '', name: session.user.email?.split('@')[0] || 'User', role: 'pod_member' as const };
+        await handleUserSession(session.user);
+        profileLoaded = true;
+      } catch (e: any) {
+        console.error("Session sync error:", e?.message);
+        // Only set fallback if profile wasn't loaded
+        if (mounted && !profileLoaded) {
+          const fallback = {
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.email?.split('@')[0] || 'User',
+            role: 'pod_member' as const,
+            podId: undefined,
+            brandId: undefined
+          };
           setCurrentUser(fallback);
         }
       } finally {
+        clearTimeout(timeoutId);
         if (mounted) setIsLoading(false);
       }
     };
