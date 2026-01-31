@@ -1,6 +1,15 @@
 // POST: Validate brand access key. Body: { brandSlug, accessKey }
-// Returns 200 { ok: true } or 401 { error: "..." }
+// Returns 200 { ok: true } or 404/401/500 { error: "..." }
 import { validateBrandAccess } from "../_shared/brandAuth.ts";
+
+function projectRefFromUrl(url: string): string | null {
+  try {
+    const m = url.match(/https?:\/\/([a-z0-9]+)\.supabase\.co/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -9,6 +18,10 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const ref = supabaseUrl ? projectRefFromUrl(supabaseUrl) : null;
+  if (ref) console.log("[client-verify] Supabase project:", ref);
 
   let body: { brandSlug?: string; accessKey?: string };
   try {
@@ -20,13 +33,14 @@ Deno.serve(async (req: Request) => {
   const brandSlug = body.brandSlug ?? null;
   const accessKey = body.accessKey ?? body.key ?? null;
 
-  if (!brandSlug || !accessKey) {
+  if (!brandSlug || accessKey === null || accessKey === undefined) {
     return jsonResponse({ error: "brandSlug and accessKey required" }, 400);
   }
 
   const result = await validateBrandAccess(brandSlug, accessKey);
   if ("error" in result) {
-    return jsonResponse({ error: result.error }, 401);
+    const status = result.status ?? 401;
+    return jsonResponse({ error: result.error }, status);
   }
 
   return jsonResponse({ ok: true });

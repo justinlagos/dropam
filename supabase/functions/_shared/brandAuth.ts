@@ -1,4 +1,5 @@
 // Shared brand access validation for client Edge Functions.
+// Single key per brand: one access_key_hash. Deterministic verification across environments.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export async function hashAccessKey(key: string): Promise<string> {
@@ -10,28 +11,40 @@ export async function hashAccessKey(key: string): Promise<string> {
     .join("");
 }
 
+/** Normalize input key: trim, collapse invisible whitespace, reject empty. */
+export function normalizeAccessKey(input: string | null | undefined): string | null {
+  const s = String(input ?? "").trim();
+  const collapsed = s.replace(/\s+/g, " ").trim();
+  return collapsed.length > 0 ? collapsed : null;
+}
+
 export interface BrandRow {
   id: string;
   slug: string;
   pod_id: string;
-  access_key_hash: string | null;
+  access_key_hash: string;
   is_active: boolean;
   archived_at: string | null;
 }
 
+export type ValidateBrandAccessResult =
+  | { brand: BrandRow }
+  | { error: string; status: 404 | 401 | 500 };
+
 export async function validateBrandAccess(
   brandSlug: string,
   accessKey: string
-): Promise<{ brand: BrandRow } | { error: string }> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+): Promise<ValidateBrandAccessResult> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl?.trim() || !serviceRoleKey?.trim()) {
+    return { error: "Missing server configuration", status: 500 };
+  }
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  // Normalize: trim and lowercase slug for case-insensitive lookup
   const slug = String(brandSlug ?? "").trim().toLowerCase();
-  if (!slug) return { error: "Brand not found" };
+  if (!slug) return { error: "Brand not found", status: 404 };
 
-  // Use ilike for case-insensitive slug match (handles Sparkle vs sparkle)
   const { data: brand, error: brandError } = await supabase
     .from("brands")
     .select("id, slug, pod_id, access_key_hash, is_active, archived_at")
@@ -40,26 +53,25 @@ export async function validateBrandAccess(
     .maybeSingle();
 
   if (brandError || !brand) {
-    return { error: "Brand not found" };
+    return { error: "Brand not found", status: 404 };
   }
   if (brand.archived_at) {
-    return { error: "Brand is archived" };
+    return { error: "Brand is archived", status: 404 };
   }
   if (!brand.is_active) {
-    return { error: "Brand is inactive" };
+    return { error: "Brand is inactive", status: 404 };
   }
-  if (!brand.access_key_hash) {
-    return { error: "Brand has no access key configured" };
+  const storedHash = brand.access_key_hash;
+  if (!storedHash || typeof storedHash !== "string") {
+    return { error: "Brand has no access key configured", status: 404 };
   }
 
-  // Normalize key: trim and remove any non-printable/control characters
-  const key = String(accessKey ?? "").trim().replace(/[\x00-\x1F\x7F]/g, "");
-  if (!key) return { error: "Invalid access key" };
+  const key = normalizeAccessKey(accessKey);
+  if (!key) return { error: "Invalid access key", status: 401 };
 
   const hash = await hashAccessKey(key);
-  const storedHash = String(brand.access_key_hash ?? "").trim();
-  if (hash !== storedHash) {
-    return { error: "Invalid access key" };
+  if (hash !== String(storedHash).trim()) {
+    return { error: "Invalid access key", status: 401 };
   }
 
   return { brand: brand as BrandRow };

@@ -30,7 +30,7 @@ Deno.serve(async (req: Request) => {
     }
     const result = await validateBrandAccess(brandSlug, accessKey);
     if ("error" in result) {
-      return jsonResponse({ error: result.error }, 401);
+      return jsonResponse({ error: result.error }, result.status ?? 401);
     }
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const { data: briefs, error } = await supabase
@@ -146,7 +146,7 @@ Deno.serve(async (req: Request) => {
 
     const result = await validateBrandAccess(brandSlug, accessKey);
     if ("error" in result) {
-      return jsonResponse({ error: result.error }, 401);
+      return jsonResponse({ error: result.error }, result.status ?? 401);
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);

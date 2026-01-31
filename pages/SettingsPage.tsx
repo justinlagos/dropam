@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { useData } from '../contexts/DataContext';
 import { supabase } from '../services/supabaseClient';
+import { getSupabaseProjectRef } from '../services/clientApi';
 import { generateAccessKey, hashAccessKey } from '../services/brandKey';
-import { ArrowLeft, BarChart, Users, Building2, Layers, Tag, Plus, Copy, RefreshCw, Archive, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, BarChart, Users, Building2, Layers, Tag, Plus, Copy, Archive, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Brand, Pod } from '../types';
 
 const activePods = (pods: Pod[]) => pods.filter((p) => !p.archivedAt);
@@ -84,19 +85,21 @@ const PodsTab: React.FC<{
   );
 };
 
+const CONFIRM_PHRASE = 'CHANGE KEY';
+
 const BrandsTab: React.FC<{
   brands: Brand[];
   pods: Pod[];
   newKeyReveal: { brandId: string; slug: string; key: string } | null;
   onCloseKeyReveal: () => void;
+  onChangeAccessKey: (brandId: string, slug: string) => void;
   onCreateBrand: (name: string, slug: string, podId: string, notificationEmail: string) => void;
   onUpdateBrand: (brandId: string, u: { name?: string; slug?: string; pod_id?: string; notification_email?: string }) => void;
-  onRotateKey: (brandId: string, slug: string) => void;
   onArchiveBrand: (brandId: string) => void;
   dropLink: (slug: string, key?: string) => string;
   copyToClipboard: (t: string) => void;
   slugFromName: (n: string) => string;
-}> = ({ brands, pods, onCreateBrand, onUpdateBrand, onRotateKey, onArchiveBrand, dropLink, copyToClipboard, slugFromName }) => {
+}> = ({ brands, pods, onCreateBrand, onUpdateBrand, onChangeAccessKey, onArchiveBrand, dropLink, copyToClipboard, slugFromName }) => {
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -139,7 +142,9 @@ const BrandsTab: React.FC<{
             </div>
             <div className="flex items-center gap-1 flex-wrap">
               <button type="button" onClick={() => copyToClipboard(dropLink(brand.slug))} className="p-1.5 text-gray-600 hover:bg-gray-200 rounded flex items-center gap-1 text-xs" title="Copy drop link"><Copy size={12} /> Link</button>
-              <button type="button" onClick={() => onRotateKey(brand.id, brand.slug)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded flex items-center gap-1 text-xs" title="Rotate access key"><RefreshCw size={12} /> Rotate</button>
+              {!brand.archivedAt && (
+                <button type="button" onClick={() => onChangeAccessKey(brand.id, brand.slug)} className="p-1.5 text-gray-600 hover:bg-gray-200 rounded flex items-center gap-1 text-xs" title="Change access key">Change key</button>
+              )}
               {!brand.archivedAt && <button type="button" onClick={() => onArchiveBrand(brand.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded flex items-center gap-1 text-xs"><Archive size={12} /> Archive</button>}
             </div>
           </div>
@@ -157,7 +162,12 @@ export const SettingsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [podsBrandsTab, setPodsBrandsTab] = useState<'pods' | 'brands'>('pods');
   const [newKeyReveal, setNewKeyReveal] = useState<{ brandId: string; slug: string; key: string } | null>(null);
-  
+  const [changeKeyBrand, setChangeKeyBrand] = useState<{ brandId: string; slug: string } | null>(null);
+  const [changeKeyConfirm, setChangeKeyConfirm] = useState('');
+  const [changeKeyLoading, setChangeKeyLoading] = useState(false);
+  const [changeKeyError, setChangeKeyError] = useState<string | null>(null);
+  const [changeKeyNewKey, setChangeKeyNewKey] = useState<string | null>(null);
+
   const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
@@ -256,12 +266,38 @@ export const SettingsPage: React.FC = () => {
       setBrands(prev => prev.map(b => b.id === brandId ? { ...b, ...updates } : b));
   };
 
-  const handleRotateBrandKey = async (brandId: string, slug: string) => {
-      if (!confirm('Generate a new access key? The old key will stop working immediately.')) return;
-      const rawKey = generateAccessKey();
-      const accessKeyHash = await hashAccessKey(rawKey);
-      await supabase.from('brands').update({ access_key_hash: accessKeyHash, updated_at: new Date().toISOString() }).eq('id', brandId);
-      setNewKeyReveal({ brandId, slug, key: rawKey });
+  const handleChangeAccessKeyOpen = (brandId: string, slug: string) => {
+      setChangeKeyBrand({ brandId, slug });
+      setChangeKeyConfirm('');
+      setChangeKeyError(null);
+      setChangeKeyNewKey(null);
+  };
+
+  const handleChangeAccessKeyClose = () => {
+      setChangeKeyBrand(null);
+      setChangeKeyConfirm('');
+      setChangeKeyError(null);
+      setChangeKeyNewKey(null);
+  };
+
+  const handleConfirmChangeKey = async () => {
+      if (!changeKeyBrand || changeKeyConfirm.trim() !== CONFIRM_PHRASE) return;
+      setChangeKeyLoading(true);
+      setChangeKeyError(null);
+      try {
+        const rawKey = generateAccessKey();
+        const accessKeyHash = await hashAccessKey(rawKey);
+        const { error } = await supabase
+          .from('brands')
+          .update({ access_key_hash: accessKeyHash, updated_at: new Date().toISOString() })
+          .eq('id', changeKeyBrand.brandId);
+        if (error) throw error;
+        setChangeKeyNewKey(rawKey);
+      } catch {
+        setChangeKeyError('Unable to change access key. Please try again.');
+      } finally {
+        setChangeKeyLoading(false);
+      }
   };
 
   const handleArchiveBrand = async (brandId: string) => {
@@ -299,7 +335,12 @@ export const SettingsPage: React.FC = () => {
         <p className="text-gray-500 mb-8">{currentUser?.email} ({currentUser?.role})</p>
 
         <div className="space-y-12">
-          
+          {isAdmin && getSupabaseProjectRef() && (
+            <section className="bg-gray-50 p-3 rounded-xl">
+              <p className="text-xs text-gray-500">Supabase project: {getSupabaseProjectRef()}</p>
+            </section>
+          )}
+
           {isAdmin && (
               <>
                 <section className="bg-gray-50 p-6 rounded-2xl">
@@ -439,9 +480,9 @@ export const SettingsPage: React.FC = () => {
                             pods={activePods(pods)}
                             newKeyReveal={newKeyReveal}
                             onCloseKeyReveal={() => setNewKeyReveal(null)}
+                            onChangeAccessKey={handleChangeAccessKeyOpen}
                             onCreateBrand={handleCreateBrand}
                             onUpdateBrand={handleSaveBrand}
-                            onRotateKey={handleRotateBrandKey}
                             onArchiveBrand={handleArchiveBrand}
                             dropLink={dropLink}
                             copyToClipboard={copyToClipboard}
@@ -467,6 +508,55 @@ export const SettingsPage: React.FC = () => {
                 </div>
                 <p className="text-xs text-gray-400 break-all font-mono mb-4">{newKeyReveal.key}</p>
                 <button type="button" onClick={() => setNewKeyReveal(null)} className="w-full py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50">Done</button>
+              </div>
+            </div>
+          )}
+
+          {changeKeyBrand && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={handleChangeAccessKeyClose}>
+              <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-gray-100" onClick={e => e.stopPropagation()}>
+                <h3 className="font-bold text-[#111111] mb-2">Change access key</h3>
+                {changeKeyNewKey ? (
+                  <>
+                    <p className="text-sm text-[#111111] mb-2">Access key updated. This key will be shown once. Copy and store it securely.</p>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      <button type="button" onClick={() => copyToClipboard(changeKeyNewKey)} className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg text-sm font-medium hover:bg-gray-200">
+                        <Copy size={14} /> Copy access key
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-4">Anyone without this key will be denied access.</p>
+                    <button type="button" onClick={handleChangeAccessKeyClose} className="w-full py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50">Done</button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-[#111111] mb-2">This will replace the current access key for this brand. Anyone using the old key will lose access immediately.</p>
+                    <p className="text-xs text-gray-500 mb-4">Only share the new key with trusted contacts. This action cannot be undone.</p>
+                    <label className="block text-xs font-medium text-[#111111] mb-1">Type CHANGE KEY to confirm</label>
+                    <input
+                      type="text"
+                      placeholder="CHANGE KEY"
+                      value={changeKeyConfirm}
+                      onChange={(e) => { setChangeKeyConfirm(e.target.value); setChangeKeyError(null); }}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-1"
+                    />
+                    {changeKeyConfirm.length > 0 && (
+                      <p className="text-xs text-amber-700 mb-3">This will invalidate the existing access key.</p>
+                    )}
+                    {changeKeyError && <p className="text-xs text-red-600 mb-3">{changeKeyError}</p>}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleConfirmChangeKey}
+                        disabled={changeKeyConfirm.trim() !== CONFIRM_PHRASE || changeKeyLoading}
+                        className="flex-1 py-2 bg-[#111111] text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:pointer-events-none"
+                      >
+                        {changeKeyLoading ? 'Changing key…' : 'Change key'}
+                      </button>
+                      <button type="button" onClick={handleChangeAccessKeyClose} className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">No changes will be made.</p>
+                  </>
+                )}
               </div>
             </div>
           )}

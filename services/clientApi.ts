@@ -6,6 +6,17 @@
 const DEFAULT_SUPABASE_URL = 'https://frpiqitlzansiipkcknl.supabase.co';
 const DEFAULT_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZycGlxaXRsemFuc2lpcGtja25sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3MDE3MTIsImV4cCI6MjA4NTI3NzcxMn0.TsgvYYrXWGt9uMBkvzALh_JqQYd3sqGJtv4NPSuokuk';
 
+/** Parse Supabase project ref from URL (e.g. frpiqitlzansiipkcknl from https://frpiqitlzansiipkcknl.supabase.co). */
+export function getSupabaseProjectRef(): string | null {
+  try {
+    const url = (import.meta as any).env?.VITE_SUPABASE_URL ?? (process as any).env?.REACT_APP_SUPABASE_URL ?? DEFAULT_SUPABASE_URL;
+    const m = String(url).match(/https?:\/\/([a-z0-9]+)\.supabase\.co/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 const getBaseUrl = () => {
   try {
     const url = (import.meta as any).env?.VITE_SUPABASE_URL ?? (process as any).env?.REACT_APP_SUPABASE_URL ?? DEFAULT_SUPABASE_URL;

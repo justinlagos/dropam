@@ -48,4 +48,10 @@ npm run seed
 
 Emails: justin@disruptdna.com (admin), esther@disruptdna.com, courage@disruptdna.com, ade@disruptdna.com, taiwo@disruptdna.com, bright@disruptdna.com, ubongking@disruptdna.com, VN@disruptdna.com
 
-After seeding, the script prints **brand access keys**. Give each key to the client for that brand; they use it on the drop page (`/drop/<brand-slug>` with the key) to submit briefs. If you already ran seed before this change, re-run `npm run seed` to create brands with keys (or set keys in Settings → Brands → Rotate key per brand).
+After seeding, the script prints **brand access keys** once at the end. Give each key to the client for that brand; they use it on the drop page (`/drop/<brand-slug>` with the key) to submit briefs.
+
+**Single Key Policy**
+
+- A brand has exactly one access key (one `access_key_hash` in the database).
+- The key does not change unless an admin explicitly changes it in Settings → Brands → Change key (with confirmation).
+- If you run seed again, keys will change because you are rebuilding the database. That is expected. In production you do not run seed.

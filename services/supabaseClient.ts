@@ -45,6 +45,18 @@ if (!supabaseUrl || !supabaseUrl.startsWith('http')) {
     console.warn('Invalid or missing Supabase URL.');
 }
 
+const supabaseProjectRef = (() => {
+  try {
+    const m = supabaseUrl.match(/https?:\/\/([a-z0-9]+)\.supabase\.co/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+})();
+if (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV && supabaseProjectRef) {
+  console.log('[Dropam] Supabase project:', supabaseProjectRef);
+}
+
 if (isPlaceholder) {
     console.error(
         "%c Supabase Not Connected! ", 

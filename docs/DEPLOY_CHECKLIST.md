@@ -20,7 +20,7 @@ supabase functions deploy client-verify
 supabase functions deploy client-briefs
 supabase functions deploy client-messages
 ```
-After deploying, existing brands may need a key rotation: Settings → Brands → Rotate for each brand.
+After deploying, ensure each brand has an access key. Admins can change a brand’s key in Settings → Brands → Change key (single key per brand; no rotation UI).
 
 ### 3. Enable Realtime (optional but recommended)
 In Supabase Dashboard → Database → Replication:
