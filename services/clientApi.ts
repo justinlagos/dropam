@@ -37,41 +37,120 @@ export interface ClientBrief {
   messages: { id: string; text: string; authorName: string; visibility: string; createdAt: string }[];
 }
 
-export async function verifyBrandAccess(shareToken: string): Promise<{ ok: boolean; slug?: string; error?: string }> {
-  const base = getBaseUrl();
+export async function verifyBrandAccess(shareToken: string): Promise<{ ok: boolean; slug?: string; brandId?: string; podId?: string; error?: string }> {
   const token = String(shareToken || '').trim();
   if (!token) return { ok: false, error: 'Invalid link' };
+
   try {
-    const res = await fetch(`${base}/client-verify`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAnonKey()}`
-      },
-      body: JSON.stringify({ shareToken: token }),
-    });
-    const data = await res.json().catch(() => ({}));
-    const errorMsg = (data as any).error;
+    // Direct Supabase query - simpler and more reliable than Edge Functions
+    const supabaseUrl = getSupabaseUrl();
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/brands?share_token=eq.${encodeURIComponent(token)}&is_active=eq.true&archived_at=is.null&select=id,slug,pod_id`,
+      {
+        headers: {
+          'apikey': getAnonKey(),
+          'Authorization': `Bearer ${getAnonKey()}`
+        }
+      }
+    );
+
     if (!res.ok) {
-      const msg = errorMsg ?? (res.status === 404 ? 'Server not configured.' : 'Invalid link');
-      return { ok: false, error: msg };
+      return { ok: false, error: 'Invalid link' };
     }
-    return { ok: true, slug: (data as any).slug };
+
+    const data = await res.json();
+    if (!data || data.length === 0) {
+      return { ok: false, error: 'Invalid link' };
+    }
+
+    const brand = data[0];
+    return { ok: true, slug: brand.slug, brandId: brand.id, podId: brand.pod_id };
   } catch (err: any) {
-    return { ok: false, error: err?.message?.includes('fetch') ? 'Network error. Check your connection.' : 'Invalid link' };
+    console.error('Brand verification error:', err);
+    return { ok: false, error: 'Network error. Check your connection.' };
   }
 }
 
 export async function getClientBriefs(shareToken: string): Promise<{ briefs: ClientBrief[]; error?: string }> {
-  const base = getBaseUrl();
-  const params = new URLSearchParams({ shareToken: String(shareToken || '').trim() });
-  const res = await fetch(`${base}/client-briefs?${params}`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${getAnonKey()}` },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { briefs: [], error: (data as any).error ?? 'Failed to load briefs' };
-  return { briefs: (data as any).briefs ?? [] };
+  const token = String(shareToken || '').trim();
+  if (!token) return { briefs: [], error: 'Invalid token' };
+
+  try {
+    const supabaseUrl = getSupabaseUrl();
+    const headers = {
+      'apikey': getAnonKey(),
+      'Authorization': `Bearer ${getAnonKey()}`
+    };
+
+    // First get brand by share_token
+    const brandRes = await fetch(
+      `${supabaseUrl}/rest/v1/brands?share_token=eq.${encodeURIComponent(token)}&is_active=eq.true&archived_at=is.null&select=id,slug,pod_id`,
+      { headers }
+    );
+    const brands = await brandRes.json();
+    if (!brands || brands.length === 0) {
+      return { briefs: [], error: 'Invalid link' };
+    }
+    const brand = brands[0];
+
+    // Get briefs for this brand
+    const briefsRes = await fetch(
+      `${supabaseUrl}/rest/v1/briefs?brand_id=eq.${brand.id}&select=id,brand_id,pod_id,title,status,submitted_at,owner_name`,
+      { headers }
+    );
+    const briefsData = await briefsRes.json();
+    if (!Array.isArray(briefsData)) {
+      return { briefs: [] };
+    }
+
+    // Get files and messages for each brief
+    const briefs: ClientBrief[] = await Promise.all(
+      briefsData.map(async (b: any) => {
+        // Get files visible to client
+        const filesRes = await fetch(
+          `${supabaseUrl}/rest/v1/brief_files?brief_id=eq.${b.id}&visible_to_client=eq.true&select=id,name,type,url,uploaded_at`,
+          { headers }
+        );
+        const files = await filesRes.json().catch(() => []);
+
+        // Get client-visible messages
+        const msgsRes = await fetch(
+          `${supabaseUrl}/rest/v1/messages?brief_id=eq.${b.id}&visibility=eq.client&select=id,text,author_name,visibility,created_at&order=created_at.asc`,
+          { headers }
+        );
+        const messages = await msgsRes.json().catch(() => []);
+
+        return {
+          id: b.id,
+          brandId: b.brand_id,
+          podId: b.pod_id,
+          title: b.title,
+          status: b.status,
+          submittedAt: b.submitted_at,
+          files: (files || []).map((f: any) => ({
+            id: f.id,
+            name: f.name,
+            type: f.type,
+            url: f.url,
+            visibleToClient: true,
+            uploadedAt: f.uploaded_at
+          })),
+          messages: (messages || []).map((m: any) => ({
+            id: m.id,
+            text: m.text,
+            authorName: m.author_name,
+            visibility: m.visibility,
+            createdAt: m.created_at
+          }))
+        };
+      })
+    );
+
+    return { briefs };
+  } catch (err: any) {
+    console.error('Failed to load briefs:', err);
+    return { briefs: [], error: 'Failed to load briefs' };
+  }
 }
 
 export async function createClientBrief(
