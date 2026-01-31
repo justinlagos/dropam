@@ -285,8 +285,9 @@ export const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center pt-24 pb-12 font-sans">
-      <div className="w-full max-w-2xl px-8">
+    <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 flex flex-col bg-white font-sans overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="w-full max-w-2xl mx-auto px-8 pt-24 pb-12">
         
         <button onClick={() => navigate('/')} className="flex items-center gap-2 text-sm text-[#6B6B6B] hover:text-[#111111] mb-8 transition-colors">
           <ArrowLeft size={16} />
@@ -479,6 +480,7 @@ export const SettingsPage: React.FC = () => {
             Sign out
           </button>
 
+        </div>
         </div>
       </div>
     </div>

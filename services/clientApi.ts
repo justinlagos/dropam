@@ -3,19 +3,22 @@
  * with brand access key. Used on /drop/:brandSlug when client is not logged in.
  */
 
+const DEFAULT_SUPABASE_URL = 'https://frpiqitlzansiipkcknl.supabase.co';
+const DEFAULT_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZycGlxaXRsemFuc2lpcGtja25sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3MDE3MTIsImV4cCI6MjA4NTI3NzcxMn0.TsgvYYrXWGt9uMBkvzALh_JqQYd3sqGJtv4NPSuokuk';
+
 const getBaseUrl = () => {
   try {
-    const url = (import.meta as any).env?.VITE_SUPABASE_URL ?? (process as any).env?.REACT_APP_SUPABASE_URL;
-    if (url) return `${url.replace(/\/$/, '')}/functions/v1`;
+    const url = (import.meta as any).env?.VITE_SUPABASE_URL ?? (process as any).env?.REACT_APP_SUPABASE_URL ?? DEFAULT_SUPABASE_URL;
+    return `${String(url).replace(/\/$/, '')}/functions/v1`;
   } catch {}
-  return '';
+  return `${DEFAULT_SUPABASE_URL}/functions/v1`;
 };
 
 const getAnonKey = () => {
   try {
-    return (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ?? (process as any).env?.REACT_APP_SUPABASE_ANON_KEY ?? '';
+    return (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ?? (process as any).env?.REACT_APP_SUPABASE_ANON_KEY ?? DEFAULT_ANON_KEY;
   } catch {}
-  return '';
+  return DEFAULT_ANON_KEY;
 };
 
 export interface ClientBrief {
@@ -31,19 +34,25 @@ export interface ClientBrief {
 
 export async function verifyBrandAccess(brandSlug: string, accessKey: string): Promise<{ ok: boolean; error?: string }> {
   const base = getBaseUrl();
-  const res = await fetch(`${base}/client-verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ brandSlug, accessKey }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, error: (data as any).error ?? 'Invalid access key' };
-  return { ok: true };
+  const key = String(accessKey || '').trim();
+  if (!key) return { ok: false, error: 'Access key is required' };
+  try {
+    const res = await fetch(`${base}/client-verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandSlug: brandSlug?.trim(), accessKey: key }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: (data as any).error ?? 'Invalid access key' };
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message?.includes('fetch') ? 'Network error. Check your connection.' : 'Invalid access key' };
+  }
 }
 
 export async function getClientBriefs(brandSlug: string, accessKey: string): Promise<{ briefs: ClientBrief[]; error?: string }> {
   const base = getBaseUrl();
-  const params = new URLSearchParams({ brandSlug, accessKey });
+  const params = new URLSearchParams({ brandSlug: brandSlug?.trim() ?? '', accessKey: String(accessKey || '').trim() });
   const res = await fetch(`${base}/client-briefs?${params}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${getAnonKey()}` },
@@ -61,8 +70,8 @@ export async function createClientBrief(
 ): Promise<{ brief?: ClientBrief; error?: string }> {
   const base = getBaseUrl();
   const form = new FormData();
-  form.set('brandSlug', brandSlug);
-  form.set('accessKey', accessKey);
+  form.set('brandSlug', brandSlug?.trim() ?? '');
+  form.set('accessKey', String(accessKey || '').trim());
   form.set('title', title ?? file.name);
   form.set('file', file);
   const res = await fetch(`${base}/client-briefs`, {
@@ -85,7 +94,12 @@ export async function sendClientMessage(
   const res = await fetch(`${base}/client-messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAnonKey()}` },
-    body: JSON.stringify({ brandSlug, accessKey, briefId, message }),
+    body: JSON.stringify({
+      brandSlug: brandSlug?.trim(),
+      accessKey: String(accessKey || '').trim(),
+      briefId,
+      message,
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return { error: (data as any).error ?? 'Failed to send message' };

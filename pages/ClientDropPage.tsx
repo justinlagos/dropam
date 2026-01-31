@@ -92,7 +92,8 @@ export const ClientDropPage: React.FC = () => {
   const loadKeyFromUrl = useCallback(() => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
-    return params.get('key') || params.get('accessKey');
+    const key = params.get('key') || params.get('accessKey');
+    return key ? key.trim() : null;
   }, []);
 
   useEffect(() => {

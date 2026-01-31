@@ -14,9 +14,11 @@ supabase db push
 ```
 
 ### 2. Deploy Edge Functions
-The **client-briefs** Edge Function is required for reliable deliverable visibility (bypasses RLS).
+Brand access keys require **client-verify**, **client-briefs**, and **client-messages**.
 ```bash
+supabase functions deploy client-verify
 supabase functions deploy client-briefs
+supabase functions deploy client-messages
 ```
 
 ### 3. Enable Realtime (optional but recommended)

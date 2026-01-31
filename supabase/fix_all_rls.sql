@@ -32,6 +32,9 @@ DROP POLICY IF EXISTS "Service role full access profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Authenticated read own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Authenticated update own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Authenticated insert profile" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_select_authenticated" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_insert_own" ON public.profiles;
 
 -- Pods policies
 DROP POLICY IF EXISTS "Public pods" ON public.pods;
@@ -39,6 +42,10 @@ DROP POLICY IF EXISTS "Authenticated read pods" ON public.pods;
 DROP POLICY IF EXISTS "Bootstrap or admin insert pods" ON public.pods;
 DROP POLICY IF EXISTS "Admin update pods" ON public.pods;
 DROP POLICY IF EXISTS "Admin delete pods" ON public.pods;
+DROP POLICY IF EXISTS "pods_select_authenticated" ON public.pods;
+DROP POLICY IF EXISTS "pods_insert_admin" ON public.pods;
+DROP POLICY IF EXISTS "pods_update_admin" ON public.pods;
+DROP POLICY IF EXISTS "pods_delete_admin" ON public.pods;
 
 -- Brands policies
 DROP POLICY IF EXISTS "Public brands" ON public.brands;
@@ -46,6 +53,10 @@ DROP POLICY IF EXISTS "Authenticated read brands" ON public.brands;
 DROP POLICY IF EXISTS "Bootstrap or admin insert brands" ON public.brands;
 DROP POLICY IF EXISTS "Admin update brands" ON public.brands;
 DROP POLICY IF EXISTS "Admin delete brands" ON public.brands;
+DROP POLICY IF EXISTS "brands_select_authenticated" ON public.brands;
+DROP POLICY IF EXISTS "brands_insert_admin" ON public.brands;
+DROP POLICY IF EXISTS "brands_update_admin" ON public.brands;
+DROP POLICY IF EXISTS "brands_delete_admin" ON public.brands;
 
 -- Folders policies
 DROP POLICY IF EXISTS "Public folders" ON public.folders;
@@ -53,6 +64,10 @@ DROP POLICY IF EXISTS "Read folders in pod or admin" ON public.folders;
 DROP POLICY IF EXISTS "Bootstrap or pod insert folders" ON public.folders;
 DROP POLICY IF EXISTS "Update folders in pod or admin" ON public.folders;
 DROP POLICY IF EXISTS "Delete folders in pod or admin" ON public.folders;
+DROP POLICY IF EXISTS "folders_select" ON public.folders;
+DROP POLICY IF EXISTS "folders_insert" ON public.folders;
+DROP POLICY IF EXISTS "folders_update" ON public.folders;
+DROP POLICY IF EXISTS "folders_delete" ON public.folders;
 
 -- Briefs policies
 DROP POLICY IF EXISTS "Public briefs" ON public.briefs;
@@ -61,17 +76,27 @@ DROP POLICY IF EXISTS "Clients read own brand briefs" ON public.briefs;
 DROP POLICY IF EXISTS "Update briefs pod or admin" ON public.briefs;
 DROP POLICY IF EXISTS "Insert briefs" ON public.briefs;
 DROP POLICY IF EXISTS "Delete briefs pod or admin" ON public.briefs;
+DROP POLICY IF EXISTS "briefs_select" ON public.briefs;
+DROP POLICY IF EXISTS "briefs_insert" ON public.briefs;
+DROP POLICY IF EXISTS "briefs_update" ON public.briefs;
+DROP POLICY IF EXISTS "briefs_delete" ON public.briefs;
 
 -- Brief files policies
 DROP POLICY IF EXISTS "Public files" ON public.brief_files;
 DROP POLICY IF EXISTS "Read brief files" ON public.brief_files;
 DROP POLICY IF EXISTS "Pod members insert brief files" ON public.brief_files;
 DROP POLICY IF EXISTS "Pod members update delete brief files" ON public.brief_files;
+DROP POLICY IF EXISTS "brief_files_select" ON public.brief_files;
+DROP POLICY IF EXISTS "brief_files_insert" ON public.brief_files;
+DROP POLICY IF EXISTS "brief_files_update" ON public.brief_files;
+DROP POLICY IF EXISTS "brief_files_delete" ON public.brief_files;
 
 -- Messages policies
 DROP POLICY IF EXISTS "Public messages" ON public.messages;
 DROP POLICY IF EXISTS "Read messages" ON public.messages;
 DROP POLICY IF EXISTS "Insert messages" ON public.messages;
+DROP POLICY IF EXISTS "messages_select" ON public.messages;
+DROP POLICY IF EXISTS "messages_insert" ON public.messages;
 
 -- ============================================
 -- STEP 3: Create SIMPLE, working profiles policies
