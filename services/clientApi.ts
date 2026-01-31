@@ -1,15 +1,15 @@
 /**
- * Client API for anonymous brand drop: calls Supabase Edge Functions
- * with brand access key. Used on /drop/:brandSlug when client is not logged in.
+ * Client API for anonymous brand drop. The link with share_token IS the credential—no code needed.
+ * Used on /drop/:shareToken when client is not logged in.
  */
 
-const DEFAULT_SUPABASE_URL = 'https://frpiqitlzansiipkcknl.supabase.co';
+import { getSupabaseUrl } from './supabaseClient';
+
 const DEFAULT_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZycGlxaXRsemFuc2lpcGtja25sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3MDE3MTIsImV4cCI6MjA4NTI3NzcxMn0.TsgvYYrXWGt9uMBkvzALh_JqQYd3sqGJtv4NPSuokuk';
 
-/** Parse Supabase project ref from URL (e.g. frpiqitlzansiipkcknl from https://frpiqitlzansiipkcknl.supabase.co). */
 export function getSupabaseProjectRef(): string | null {
   try {
-    const url = (import.meta as any).env?.VITE_SUPABASE_URL ?? (process as any).env?.REACT_APP_SUPABASE_URL ?? DEFAULT_SUPABASE_URL;
+    const url = getSupabaseUrl();
     const m = String(url).match(/https?:\/\/([a-z0-9]+)\.supabase\.co/);
     return m ? m[1] : null;
   } catch {
@@ -17,13 +17,7 @@ export function getSupabaseProjectRef(): string | null {
   }
 }
 
-const getBaseUrl = () => {
-  try {
-    const url = (import.meta as any).env?.VITE_SUPABASE_URL ?? (process as any).env?.REACT_APP_SUPABASE_URL ?? DEFAULT_SUPABASE_URL;
-    return `${String(url).replace(/\/$/, '')}/functions/v1`;
-  } catch {}
-  return `${DEFAULT_SUPABASE_URL}/functions/v1`;
-};
+const getBaseUrl = () => `${getSupabaseUrl().replace(/\/$/, '')}/functions/v1`;
 
 const getAnonKey = () => {
   try {
@@ -43,30 +37,31 @@ export interface ClientBrief {
   messages: { id: string; text: string; authorName: string; visibility: string; createdAt: string }[];
 }
 
-export async function verifyBrandAccess(brandSlug: string, accessKey: string): Promise<{ ok: boolean; error?: string }> {
+export async function verifyBrandAccess(shareToken: string): Promise<{ ok: boolean; slug?: string; error?: string }> {
   const base = getBaseUrl();
-  const key = String(accessKey || '').trim();
-  if (!key) return { ok: false, error: 'Access key is required' };
+  const token = String(shareToken || '').trim();
+  if (!token) return { ok: false, error: 'Invalid link' };
   try {
     const res = await fetch(`${base}/client-verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brandSlug: brandSlug?.trim(), accessKey: key }),
+      body: JSON.stringify({ shareToken: token }),
     });
     const data = await res.json().catch(() => ({}));
+    const errorMsg = (data as any).error;
     if (!res.ok) {
-      const msg = (data as any).error ?? (res.status === 404 ? 'Server not configured. Deploy client-verify Edge Function.' : 'Invalid access key');
+      const msg = errorMsg ?? (res.status === 404 ? 'Server not configured.' : 'Invalid link');
       return { ok: false, error: msg };
     }
-    return { ok: true };
+    return { ok: true, slug: (data as any).slug };
   } catch (err: any) {
-    return { ok: false, error: err?.message?.includes('fetch') ? 'Network error. Check your connection.' : 'Invalid access key' };
+    return { ok: false, error: err?.message?.includes('fetch') ? 'Network error. Check your connection.' : 'Invalid link' };
   }
 }
 
-export async function getClientBriefs(brandSlug: string, accessKey: string): Promise<{ briefs: ClientBrief[]; error?: string }> {
+export async function getClientBriefs(shareToken: string): Promise<{ briefs: ClientBrief[]; error?: string }> {
   const base = getBaseUrl();
-  const params = new URLSearchParams({ brandSlug: brandSlug?.trim() ?? '', accessKey: String(accessKey || '').trim() });
+  const params = new URLSearchParams({ shareToken: String(shareToken || '').trim() });
   const res = await fetch(`${base}/client-briefs?${params}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${getAnonKey()}` },
@@ -77,15 +72,13 @@ export async function getClientBriefs(brandSlug: string, accessKey: string): Pro
 }
 
 export async function createClientBrief(
-  brandSlug: string,
-  accessKey: string,
+  shareToken: string,
   file: File,
   title?: string
 ): Promise<{ brief?: ClientBrief; error?: string }> {
   const base = getBaseUrl();
   const form = new FormData();
-  form.set('brandSlug', brandSlug?.trim() ?? '');
-  form.set('accessKey', String(accessKey || '').trim());
+  form.set('shareToken', String(shareToken || '').trim());
   form.set('title', title ?? file.name);
   form.set('file', file);
   const res = await fetch(`${base}/client-briefs`, {
@@ -99,8 +92,7 @@ export async function createClientBrief(
 }
 
 export async function sendClientMessage(
-  brandSlug: string,
-  accessKey: string,
+  shareToken: string,
   briefId: string,
   message: string
 ): Promise<{ id?: string; error?: string }> {
@@ -109,8 +101,7 @@ export async function sendClientMessage(
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAnonKey()}` },
     body: JSON.stringify({
-      brandSlug: brandSlug?.trim(),
-      accessKey: String(accessKey || '').trim(),
+      shareToken: String(shareToken || '').trim(),
       briefId,
       message,
     }),
@@ -118,27 +109,4 @@ export async function sendClientMessage(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return { error: (data as any).error ?? 'Failed to send message' };
   return { id: (data as any).id };
-}
-
-const STORAGE_KEY = 'dropam_brand_key';
-
-export function getStoredAccessKey(brandSlug: string): string | null {
-  try {
-    const raw = sessionStorage.getItem(`${STORAGE_KEY}_${brandSlug}`);
-    return raw;
-  } catch {
-    return null;
-  }
-}
-
-export function setStoredAccessKey(brandSlug: string, accessKey: string): void {
-  try {
-    sessionStorage.setItem(`${STORAGE_KEY}_${brandSlug}`, accessKey);
-  } catch {}
-}
-
-export function clearStoredAccessKey(brandSlug: string): void {
-  try {
-    sessionStorage.removeItem(`${STORAGE_KEY}_${brandSlug}`);
-  } catch {}
 }

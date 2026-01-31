@@ -1,6 +1,22 @@
 export type BriefStatus = 'new' | 'in_progress' | 'review' | 'delivered';
-export type UserRole = 'admin' | 'pod_lead' | 'pod_member' | 'client';
+// Simplified: 'admin' has system-wide access, 'user' gets access via memberships
+// Clients don't have profiles - they access via brand share tokens
+export type UserRole = 'admin' | 'user';
+// Legacy roles for backward compatibility during migration
+export type LegacyUserRole = 'admin' | 'pod_lead' | 'pod_member' | 'client';
+export type MembershipRole = 'pod_member' | 'pod_lead';
+export type MembershipStatus = 'active' | 'inactive' | 'pending';
 export type Priority = 'normal' | 'urgent';
+
+export interface Membership {
+  id: string;
+  userId: string;
+  podId: string;
+  role: MembershipRole;
+  status: MembershipStatus;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface UserPreferences {
   notifications: boolean;
@@ -13,7 +29,8 @@ export interface Brand {
   name: string;
   slug: string;
   podId: string;
-  accessKeyHash?: string | null;
+  shareToken?: string;
+  accessKey?: string; // For client entry without auth
   isActive?: boolean;
   notificationEmail?: string | null;
   archivedAt?: string | null;
@@ -36,8 +53,10 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  // Legacy: kept for backward compatibility during migration
   podId?: string;
-  brandId?: string; // For clients
+  // Memberships define which pods this user can access
+  memberships?: Membership[];
   preferences?: UserPreferences;
 }
 

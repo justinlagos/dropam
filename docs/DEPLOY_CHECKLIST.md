@@ -14,7 +14,7 @@ supabase db push
 ```
 
 ### 2. Deploy Edge Functions (required for brand access keys)
-If clients get "Invalid access key", deploy all three functions:
+If clients get "Invalid access key", **redeploy** all three functions so Supabase runs the latest code (key normalization and correct response body). Use the same Supabase project as your app (the one in `VITE_SUPABASE_URL`):
 ```bash
 supabase functions deploy client-verify
 supabase functions deploy client-briefs
@@ -30,7 +30,7 @@ In Supabase Dashboard → Database → Replication:
 
 ### 4. Environment variables
 Set in your hosting (Vercel, Netlify, etc.):
-- `VITE_SUPABASE_URL` – your Supabase project URL
+- `VITE_SUPABASE_URL` – your Supabase project URL (e.g. `https://YOUR_PROJECT_REF.supabase.co`). Must be the project where brands and the client-verify Edge Function live. A typo in the project ref (e.g. wrong letter) causes "Invalid access key" because verification runs against the wrong project.
 - `VITE_SUPABASE_ANON_KEY` – your Supabase anon key
 
 ### 5. CORS for Edge Functions

@@ -1,6 +1,7 @@
-// POST: Validate brand access key. Body: { brandSlug, accessKey }
-// Returns 200 { ok: true } or 404/401/500 { error: "..." }
-import { validateBrandAccess } from "../_shared/brandAuth.ts";
+// POST: Validate brand access. Body: { shareToken }
+// The link with share_token IS the credential—no code needed.
+// Returns 200 { ok: true, slug } or 404/401/500 { error: "..." }
+import { validateBrandByShareToken } from "../_shared/brandAuth.ts";
 
 function projectRefFromUrl(url: string): string | null {
   try {
@@ -23,27 +24,26 @@ Deno.serve(async (req: Request) => {
   const ref = supabaseUrl ? projectRefFromUrl(supabaseUrl) : null;
   if (ref) console.log("[client-verify] Supabase project:", ref);
 
-  let body: { brandSlug?: string; accessKey?: string };
+  let body: { shareToken?: string };
   try {
     body = await req.json();
   } catch {
     return jsonResponse({ error: "Invalid JSON" }, 400);
   }
 
-  const brandSlug = body.brandSlug ?? null;
-  const accessKey = body.accessKey ?? body.key ?? null;
+  const shareToken = body.shareToken ?? null;
 
-  if (!brandSlug || accessKey === null || accessKey === undefined) {
-    return jsonResponse({ error: "brandSlug and accessKey required" }, 400);
+  if (!shareToken || typeof shareToken !== "string" || !shareToken.trim()) {
+    return jsonResponse({ error: "shareToken required" }, 400);
   }
 
-  const result = await validateBrandAccess(brandSlug, accessKey);
+  const result = await validateBrandByShareToken(shareToken.trim());
   if ("error" in result) {
     const status = result.status ?? 401;
     return jsonResponse({ error: result.error }, status);
   }
 
-  return jsonResponse({ ok: true });
+  return jsonResponse({ ok: true, slug: result.brand.slug });
 });
 
 function jsonResponse(data: object, status = 200) {

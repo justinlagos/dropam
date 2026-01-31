@@ -10,9 +10,6 @@ import {
   getClientBriefs,
   createClientBrief,
   sendClientMessage,
-  getStoredAccessKey,
-  setStoredAccessKey,
-  clearStoredAccessKey,
   type ClientBrief,
 } from '../services/clientApi';
 import { Brief, Brand } from '../types';
@@ -74,12 +71,10 @@ const clientBriefToBrief = (b: ClientBrief, brandId: string): Brief => ({
 });
 
 export const ClientDropPage: React.FC = () => {
-  const { brandSlug } = useParams<{ brandSlug: string }>();
-  const [accessKey, setAccessKey] = useState<string | null>(null);
-  const [passcodeInput, setPasscodeInput] = useState('');
-  const [passcodeError, setPasscodeError] = useState('');
+  const { shareToken } = useParams<{ shareToken: string }>();
+  const [verified, setVerified] = useState(false);
+  const [brandSlug, setBrandSlug] = useState('');
   const [briefs, setBriefs] = useState<ClientBrief[]>([]);
-  const [brandName, setBrandName] = useState(brandSlug ? brandSlug.charAt(0).toUpperCase() + brandSlug.slice(1) : '');
   const [loading, setLoading] = useState(true);
   const [authChecking, setAuthChecking] = useState(true);
   const [selectedBrief, setSelectedBrief] = useState<Brief | null>(null);
@@ -89,56 +84,44 @@ export const ClientDropPage: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'brief' | 'folder'; brief?: Brief; folder?: ClientFolder } | null>(null);
 
-  const loadKeyFromUrl = useCallback(() => {
-    if (typeof window === 'undefined') return null;
-    const params = new URLSearchParams(window.location.search);
-    const key = params.get('key') || params.get('accessKey');
-    return key ? key.trim() : null;
-  }, []);
+  const brandName = brandSlug ? brandSlug.charAt(0).toUpperCase() + brandSlug.slice(1) : '';
 
   useEffect(() => {
-    if (!brandSlug) return;
-    const urlKey = loadKeyFromUrl();
-    const stored = getStoredAccessKey(brandSlug);
-    const key = urlKey || stored;
-    if (!key) {
+    if (!shareToken?.trim()) {
       setAuthChecking(false);
-      setAccessKey(null);
+      setVerified(false);
       return;
     }
-    verifyBrandAccess(brandSlug, key).then(({ ok, error }) => {
+    verifyBrandAccess(shareToken.trim()).then(({ ok, slug, error }) => {
       setAuthChecking(false);
       if (ok) {
-        setStoredAccessKey(brandSlug, key);
-        setAccessKey(key);
+        setVerified(true);
+        setBrandSlug(slug ?? '');
       } else {
-        setAccessKey(null);
-        if (stored) clearStoredAccessKey(brandSlug);
+        setVerified(false);
       }
     });
-  }, [brandSlug, loadKeyFromUrl]);
+  }, [shareToken]);
 
   useEffect(() => {
-    if (!brandSlug || !accessKey) return;
+    if (!shareToken || !verified) return;
     setLoading(true);
-    getClientBriefs(brandSlug, accessKey).then(({ briefs: list }) => {
+    getClientBriefs(shareToken).then(({ briefs: list }) => {
       setBriefs(list);
       setLoading(false);
     });
-  }, [brandSlug, accessKey]);
+  }, [shareToken, verified]);
 
   // Realtime: poll frequently so client sees status/deliverables without manual refresh
   useEffect(() => {
-    if (!brandSlug || !accessKey) return;
+    if (!shareToken || !verified) return;
     let interval: ReturnType<typeof setInterval>;
     const poll = () => {
       if (document.visibilityState === 'visible') {
-        getClientBriefs(brandSlug, accessKey).then(({ briefs: list }) => setBriefs(list));
+        getClientBriefs(shareToken).then(({ briefs: list }) => setBriefs(list));
       }
     };
-    // Poll every 1.5 seconds for near-instant updates
     interval = setInterval(poll, 1500);
-    // Also poll on visibility change (when tab becomes active)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') poll();
     };
@@ -147,15 +130,13 @@ export const ClientDropPage: React.FC = () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [brandSlug, accessKey]);
+  }, [shareToken, verified]);
 
-  // Keep selectedBrief in sync with briefs array (for realtime updates)
   useEffect(() => {
     if (selectedBrief) {
       const updated = briefs.find(b => b.id === selectedBrief.id);
       if (updated) {
         const updatedAsBrief = clientBriefToBrief(updated, '');
-        // Only update if something changed
         if (JSON.stringify(updatedAsBrief) !== JSON.stringify(selectedBrief)) {
           setSelectedBrief(updatedAsBrief);
         }
@@ -163,16 +144,15 @@ export const ClientDropPage: React.FC = () => {
     }
   }, [briefs, selectedBrief]);
 
-  // Client folders: load from sessionStorage when we have brand + key
   useEffect(() => {
-    if (!brandSlug || !accessKey) return;
-    setFolders(getClientFolders(brandSlug));
-  }, [brandSlug, accessKey]);
+    if (!shareToken || !verified) return;
+    setFolders(getClientFolders(shareToken));
+  }, [shareToken, verified]);
 
   useEffect(() => {
-    if (!brandSlug || !accessKey) return;
-    setClientFolders(brandSlug, folders);
-  }, [brandSlug, accessKey, folders]);
+    if (!shareToken || !verified) return;
+    setClientFolders(shareToken, folders);
+  }, [shareToken, verified, folders]);
 
   const moveBriefToFolder = useCallback((briefId: string, folderId: string) => {
     setFolders((prev) =>
@@ -195,37 +175,22 @@ export const ClientDropPage: React.FC = () => {
     if (selectedFolder?.id === folderId) setSelectedFolder(null);
   }, [selectedFolder?.id]);
 
-  const handlePasscodeSubmit = async () => {
-    const key = passcodeInput.trim();
-    if (!key || !brandSlug) return;
-    setPasscodeError('');
-    const { ok, error } = await verifyBrandAccess(brandSlug, key);
-    if (ok) {
-      setStoredAccessKey(brandSlug, key);
-      setAccessKey(key);
-      setPasscodeInput('');
-      getClientBriefs(brandSlug, key).then(({ briefs: list }) => setBriefs(list));
-    } else {
-      setPasscodeError(error ?? 'Invalid access key');
-    }
-  };
-
   const uploadSingleFile = useCallback(
     (file: File): Promise<ClientBrief | null> =>
       new Promise((resolve) => {
-        createClientBrief(brandSlug!, accessKey!, file).then(({ brief }) => {
+        createClientBrief(shareToken!, file).then(({ brief }) => {
           if (brief) {
             setBriefs((prev) => [brief, ...prev]);
             resolve(brief);
           } else resolve(null);
         });
       }),
-    [brandSlug, accessKey]
+    [shareToken]
   );
 
   const handleUpload = useCallback(
     (files: File[]) => {
-      if (!files.length || !brandSlug || !accessKey) return;
+      if (!files.length || !shareToken || !verified) return;
       const file = files[0];
       setUploadProgress(0);
       let progress = 0;
@@ -234,7 +199,7 @@ export const ClientDropPage: React.FC = () => {
         setUploadProgress(progress);
         if (progress >= 100) {
           clearInterval(interval);
-          createClientBrief(brandSlug, accessKey, file).then(({ brief }) => {
+          createClientBrief(shareToken, file).then(({ brief }) => {
             setUploadProgress(null);
             if (brief) {
               setBriefs((prev) => [brief, ...prev]);
@@ -245,12 +210,12 @@ export const ClientDropPage: React.FC = () => {
         }
       }, 20);
     },
-    [brandSlug, accessKey]
+    [shareToken, verified]
   );
 
   const handleDrop = useCallback(
     async (files: File[], e: React.DragEvent) => {
-      if (!files.length || !brandSlug || !accessKey) return;
+      if (!files.length || !shareToken || !verified) return;
       const item = e?.dataTransfer?.items?.[0];
       const entry = item && typeof (item as any).webkitGetAsEntry === 'function' ? (item as any).webkitGetAsEntry() : null;
       if (entry?.isDirectory) {
@@ -276,7 +241,7 @@ export const ClientDropPage: React.FC = () => {
           setUploadProgress(null);
           setShowSuccess(true);
           setTimeout(() => setShowSuccess(false), 4000);
-        } catch (err) {
+        } catch {
           setUploadProgress(null);
           handleUpload(files);
         }
@@ -284,18 +249,18 @@ export const ClientDropPage: React.FC = () => {
         handleUpload(files);
       }
     },
-    [brandSlug, accessKey, handleUpload, uploadSingleFile]
+    [shareToken, verified, handleUpload, uploadSingleFile]
   );
 
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
-      if (e.clipboardData?.files?.length && brandSlug && accessKey) {
+      if (e.clipboardData?.files?.length && shareToken && verified) {
         handleUpload(Array.from(e.clipboardData.files));
       }
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [brandSlug, accessKey, handleUpload]);
+  }, [shareToken, verified, handleUpload]);
 
   if (authChecking) {
     return (
@@ -305,36 +270,20 @@ export const ClientDropPage: React.FC = () => {
     );
   }
 
-  if (!brandSlug) {
+  if (!shareToken) {
     return (
       <div className="min-h-screen flex items-center justify-center text-[#111111]">
-        Brand not found.
+        Invalid link.
       </div>
     );
   }
 
-  if (!accessKey) {
+  if (!verified) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F5F5F7] px-6">
-        <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-          <h1 className="text-lg font-bold text-[#111111] mb-1">Enter access key</h1>
-          <p className="text-sm text-gray-500 mb-6">Use the key shared by your team to access this drop portal.</p>
-          <input
-            type="text"
-            placeholder="Access key"
-            value={passcodeInput}
-            onChange={(e) => { setPasscodeInput(e.target.value); setPasscodeError(''); }}
-            onKeyDown={(e) => e.key === 'Enter' && handlePasscodeSubmit()}
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-[#111111] mb-4"
-          />
-          {passcodeError && <p className="text-xs text-red-600 mb-2">{passcodeError}</p>}
-          <button
-            type="button"
-            onClick={handlePasscodeSubmit}
-            className="w-full py-3 bg-[#111111] text-white text-sm font-medium rounded-xl hover:opacity-90 transition-opacity"
-          >
-            Continue
-          </button>
+        <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center">
+          <h1 className="text-lg font-bold text-[#111111] mb-2">This link is invalid or expired</h1>
+          <p className="text-sm text-gray-500">Ask your team for a new link to access this area.</p>
         </div>
       </div>
     );
@@ -353,7 +302,6 @@ export const ClientDropPage: React.FC = () => {
       progress={uploadProgress}
       overlayText="Drop to deliver"
     >
-      {/* Top left: product name + brand name only */}
       <div className="absolute top-0 left-0 p-6 z-20 pointer-events-none">
         <p className="text-[11px] font-medium text-[#111111]">Dropam</p>
         <p className="text-[10px] text-gray-500 mt-0.5">{brand.name}</p>
@@ -448,8 +396,8 @@ export const ClientDropPage: React.FC = () => {
               onClose={() => setSelectedBrief(null)}
               viewType="client"
               onClientSendMessage={async (briefId, text) => {
-                await sendClientMessage(brandSlug, accessKey, briefId, text);
-                getClientBriefs(brandSlug, accessKey).then(({ briefs: list }) => setBriefs(list));
+                await sendClientMessage(shareToken!, briefId, text);
+                getClientBriefs(shareToken!).then(({ briefs: list }) => setBriefs(list));
               }}
             />
           </div>
@@ -492,7 +440,7 @@ export const ClientDropPage: React.FC = () => {
                 ? [
                     { label: 'View', onClick: () => { setSelectedBrief(contextMenu.brief!); setContextMenu(null); } },
                     { label: 'Send message', onClick: () => { setSelectedBrief(contextMenu.brief!); setContextMenu(null); } },
-                    { label: 'Refresh', onClick: () => { getClientBriefs(brandSlug, accessKey).then(({ briefs: list }) => setBriefs(list)); setContextMenu(null); } },
+                    { label: 'Refresh', onClick: () => { getClientBriefs(shareToken!).then(({ briefs: list }) => setBriefs(list)); setContextMenu(null); } },
                   ]
                 : []
             }
@@ -502,4 +450,3 @@ export const ClientDropPage: React.FC = () => {
     </FileUpload>
   );
 };
-

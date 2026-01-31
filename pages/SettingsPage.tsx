@@ -4,16 +4,29 @@ import { useUser } from '../contexts/UserContext';
 import { useData } from '../contexts/DataContext';
 import { supabase } from '../services/supabaseClient';
 import { getSupabaseProjectRef } from '../services/clientApi';
-import { generateAccessKey, hashAccessKey } from '../services/brandKey';
-import { ArrowLeft, BarChart, Users, Building2, Layers, Tag, Plus, Copy, Archive, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Brand, Pod } from '../types';
+import { generateAccessKey, hashAccessKey, generateShareToken } from '../services/brandKey';
+import { ArrowLeft, BarChart, Users, Building2, Layers, Tag, Plus, Copy, Archive, ChevronRight, UserPlus } from 'lucide-react';
+import { Brand, Pod, MembershipRole } from '../types';
+
+interface ProfileWithMemberships {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'user';
+  memberships: {
+    id: string;
+    pod_id: string;
+    role: MembershipRole;
+    status: string;
+  }[];
+}
 
 const activePods = (pods: Pod[]) => pods.filter((p) => !p.archivedAt);
 const activeBrands = (brands: Brand[]) => brands.filter((b) => !b.archivedAt);
 
 const PodsTab: React.FC<{
   pods: Pod[];
-  profiles: any[];
+  profiles: ProfileWithMemberships[];
   onCreatePod: (name: string, slug: string, description: string, leadId: string) => void;
   onUpdatePod: (podId: string, u: { name?: string; slug?: string; description?: string; lead_id?: string }) => void;
   onArchivePod: (podId: string) => void;
@@ -42,7 +55,7 @@ const PodsTab: React.FC<{
           <input placeholder="Description (optional)" value={description} onChange={e => setDescription(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
           <select value={leadId} onChange={e => setLeadId(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
             <option value="">No lead</option>
-            {profiles.filter((p: any) => ['pod_member', 'pod_lead', 'admin'].includes(p.role)).map((p: any) => (
+            {profiles.filter(p => p.role !== 'admin' || p.memberships.length > 0).map(p => (
               <option key={p.id} value={p.id}>{p.name || p.email}</option>
             ))}
           </select>
@@ -60,7 +73,7 @@ const PodsTab: React.FC<{
               <input defaultValue={pod.slug} id={`pod-slug-${pod.id}`} className="w-24 px-2 py-1 border rounded text-sm" />
               <select id={`pod-lead-${pod.id}`} defaultValue={pod.leadId || ''} className="px-2 py-1 border rounded text-sm">
                 <option value="">No lead</option>
-                {profiles.filter((p: any) => ['pod_member', 'pod_lead', 'admin'].includes(p.role)).map((p: any) => (
+                {profiles.map(p => (
                   <option key={p.id} value={p.id}>{p.name || p.email}</option>
                 ))}
               </select>
@@ -85,21 +98,16 @@ const PodsTab: React.FC<{
   );
 };
 
-const CONFIRM_PHRASE = 'CHANGE KEY';
-
 const BrandsTab: React.FC<{
   brands: Brand[];
   pods: Pod[];
-  newKeyReveal: { brandId: string; slug: string; key: string } | null;
-  onCloseKeyReveal: () => void;
-  onChangeAccessKey: (brandId: string, slug: string) => void;
   onCreateBrand: (name: string, slug: string, podId: string, notificationEmail: string) => void;
   onUpdateBrand: (brandId: string, u: { name?: string; slug?: string; pod_id?: string; notification_email?: string }) => void;
   onArchiveBrand: (brandId: string) => void;
-  dropLink: (slug: string, key?: string) => string;
+  dropLink: (shareToken: string) => string;
   copyToClipboard: (t: string) => void;
   slugFromName: (n: string) => string;
-}> = ({ brands, pods, onCreateBrand, onUpdateBrand, onChangeAccessKey, onArchiveBrand, dropLink, copyToClipboard, slugFromName }) => {
+}> = ({ brands, pods, onCreateBrand, onUpdateBrand, onArchiveBrand, dropLink, copyToClipboard, slugFromName }) => {
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -141,9 +149,8 @@ const BrandsTab: React.FC<{
               {pod && <span className="text-xs text-gray-400 truncate">{pod.name}</span>}
             </div>
             <div className="flex items-center gap-1 flex-wrap">
-              <button type="button" onClick={() => copyToClipboard(dropLink(brand.slug))} className="p-1.5 text-gray-600 hover:bg-gray-200 rounded flex items-center gap-1 text-xs" title="Copy drop link"><Copy size={12} /> Link</button>
-              {!brand.archivedAt && (
-                <button type="button" onClick={() => onChangeAccessKey(brand.id, brand.slug)} className="p-1.5 text-gray-600 hover:bg-gray-200 rounded flex items-center gap-1 text-xs" title="Change access key">Change key</button>
+              {brand.shareToken && (
+                <button type="button" onClick={() => copyToClipboard(dropLink(brand.shareToken!))} className="p-1.5 text-gray-600 hover:bg-gray-200 rounded flex items-center gap-1 text-xs" title="Copy link"><Copy size={12} /> Copy link</button>
               )}
               {!brand.archivedAt && <button type="button" onClick={() => onArchiveBrand(brand.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded flex items-center gap-1 text-xs"><Archive size={12} /> Archive</button>}
             </div>
@@ -158,174 +165,184 @@ export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, signOut } = useUser();
   const { briefs, pods, brands, setPods, setBrands } = useData();
-  const [profiles, setProfiles] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<ProfileWithMemberships[]>([]);
   const [loading, setLoading] = useState(false);
   const [podsBrandsTab, setPodsBrandsTab] = useState<'pods' | 'brands'>('pods');
-  const [newKeyReveal, setNewKeyReveal] = useState<{ brandId: string; slug: string; key: string } | null>(null);
-  const [changeKeyBrand, setChangeKeyBrand] = useState<{ brandId: string; slug: string } | null>(null);
-  const [changeKeyConfirm, setChangeKeyConfirm] = useState('');
-  const [changeKeyLoading, setChangeKeyLoading] = useState(false);
-  const [changeKeyError, setChangeKeyError] = useState<string | null>(null);
-  const [changeKeyNewKey, setChangeKeyNewKey] = useState<string | null>(null);
 
   const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
-      if (isAdmin) {
-          fetchProfiles();
-      }
+    if (isAdmin) {
+      fetchProfiles();
+    }
   }, [isAdmin]);
 
   const fetchProfiles = async () => {
-      setLoading(true);
-      const { data } = await supabase.from('profiles').select('*');
-      if (data) setProfiles(data);
-      setLoading(false);
+    setLoading(true);
+    try {
+      // Fetch profiles
+      const { data: profilesData } = await supabase.from('profiles').select('*');
+
+      // Fetch memberships
+      const { data: membershipsData } = await supabase.from('memberships').select('*');
+
+      if (profilesData) {
+        // Map profiles with their memberships
+        const profilesWithMemberships: ProfileWithMemberships[] = profilesData.map((p: any) => ({
+          id: p.id,
+          email: p.email,
+          name: p.name,
+          role: p.role === 'admin' ? 'admin' : 'user',
+          memberships: (membershipsData || [])
+            .filter((m: any) => m.user_id === p.id)
+            .map((m: any) => ({
+              id: m.id,
+              pod_id: m.pod_id,
+              role: m.role,
+              status: m.status
+            }))
+        }));
+        setProfiles(profilesWithMemberships);
+      }
+    } catch (err) {
+      console.error('Error fetching profiles:', err);
+    }
+    setLoading(false);
   };
 
   const [roleError, setRoleError] = useState<string | null>(null);
 
   const handleUpdateRole = async (userId: string, newRole: string) => {
-      // Block client role - clients are brands, not internal users
-      if (newRole === 'client') {
-        setRoleError('Clients access via brand drop links, not internal accounts.');
-        setTimeout(() => setRoleError(null), 3000);
-        return;
-      }
-      await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
-      fetchProfiles();
-  };
-  
-  const handleUpdatePod = async (userId: string, podId: string) => {
-      await supabase.from('profiles').update({ pod_id: podId }).eq('id', userId);
-      fetchProfiles();
+    // Only allow 'admin' or 'user' roles
+    if (newRole !== 'admin' && newRole !== 'user') {
+      setRoleError('Invalid role. Use Admin or User.');
+      setTimeout(() => setRoleError(null), 3000);
+      return;
+    }
+    await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
+    fetchProfiles();
   };
 
-  const handleUpdateBrand = async (userId: string, brandId: string) => {
-      await supabase.from('profiles').update({ brand_id: brandId }).eq('id', userId);
+  // Add a membership for a user to a pod
+  const handleAddMembership = async (userId: string, podId: string, role: MembershipRole = 'pod_member') => {
+    const { error } = await supabase.from('memberships').upsert({
+      user_id: userId,
+      pod_id: podId,
+      role,
+      status: 'active'
+    }, { onConflict: 'user_id,pod_id' });
+
+    if (error) {
+      console.error('Error adding membership:', error);
+      setRoleError('Failed to add pod membership.');
+      setTimeout(() => setRoleError(null), 3000);
+    } else {
       fetchProfiles();
+    }
+  };
+
+  // Remove a membership
+  const handleRemoveMembership = async (membershipId: string) => {
+    await supabase.from('memberships').delete().eq('id', membershipId);
+    fetchProfiles();
+  };
+
+  // Update membership role
+  const handleUpdateMembershipRole = async (membershipId: string, newRole: MembershipRole) => {
+    await supabase.from('memberships').update({ role: newRole }).eq('id', membershipId);
+    fetchProfiles();
   };
 
   const handleSetPodLead = async (podId: string, leadId: string) => {
-      const lead = leadId ? profiles.find((p: any) => p.id === leadId) : null;
-      await supabase.from('pods').update({ lead_id: leadId || null, lead_name: lead?.name || null }).eq('id', podId);
-      setPods(prev => prev.map(p => p.id === podId ? { ...p, leadId: leadId || undefined, leadName: lead?.name } : p));
+    const lead = leadId ? profiles.find(p => p.id === leadId) : null;
+    await supabase.from('pods').update({ lead_id: leadId || null, lead_name: lead?.name || null }).eq('id', podId);
+    setPods(prev => prev.map(p => p.id === podId ? { ...p, leadId: leadId || undefined, leadName: lead?.name } : p));
   };
 
   const slugFromName = (name: string) => name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
   const handleCreatePod = async (name: string, slug: string, description: string, leadId: string) => {
-      const lead = leadId ? profiles.find((p: any) => p.id === leadId) : null;
-      const { data, error } = await supabase.from('pods').insert({
-          name,
-          slug: slug || slugFromName(name),
-          description: description || null,
-          lead_id: leadId || null,
-          lead_name: lead?.name || null,
-      }).select().single();
-      if (!error && data) setPods(prev => [...prev, { id: data.id, name: data.name, slug: data.slug, description: data.description, leadName: data.lead_name, leadId: data.lead_id }]);
+    const lead = leadId ? profiles.find(p => p.id === leadId) : null;
+    const { data, error } = await supabase.from('pods').insert({
+      name,
+      slug: slug || slugFromName(name),
+      description: description || null,
+      lead_id: leadId || null,
+      lead_name: lead?.name || null,
+    }).select().single();
+    if (!error && data) setPods(prev => [...prev, { id: data.id, name: data.name, slug: data.slug, description: data.description, leadName: data.lead_name, leadId: data.lead_id }]);
   };
 
   const handleSavePod = async (podId: string, updates: { name?: string; slug?: string; description?: string; lead_id?: string }) => {
-      const lead = updates.lead_id !== undefined ? profiles.find((p: any) => p.id === updates.lead_id) : null;
-      await supabase.from('pods').update({
-          ...(updates.name !== undefined && { name: updates.name }),
-          ...(updates.slug !== undefined && { slug: updates.slug }),
-          ...(updates.description !== undefined && { description: updates.description }),
-          ...(updates.lead_id !== undefined && { lead_id: updates.lead_id || null, lead_name: lead?.name || null }),
-      }).eq('id', podId);
-      setPods(prev => prev.map(p => p.id === podId ? { ...p, ...updates, leadName: lead?.name ?? p.leadName } : p));
+    const lead = updates.lead_id !== undefined ? profiles.find(p => p.id === updates.lead_id) : null;
+    await supabase.from('pods').update({
+      ...(updates.name !== undefined && { name: updates.name }),
+      ...(updates.slug !== undefined && { slug: updates.slug }),
+      ...(updates.description !== undefined && { description: updates.description }),
+      ...(updates.lead_id !== undefined && { lead_id: updates.lead_id || null, lead_name: lead?.name || null }),
+    }).eq('id', podId);
+    setPods(prev => prev.map(p => p.id === podId ? { ...p, ...updates, leadName: lead?.name ?? p.leadName } : p));
   };
 
   const handleArchivePod = async (podId: string) => {
-      if (!confirm('Archive this pod? It will be hidden from normal lists.')) return;
-      await supabase.from('pods').update({ archived_at: new Date().toISOString() }).eq('id', podId);
-      setPods(prev => prev.map(p => p.id === podId ? { ...p, archivedAt: new Date().toISOString() } : p));
+    if (!confirm('Archive this pod? It will be hidden from normal lists.')) return;
+    await supabase.from('pods').update({ archived_at: new Date().toISOString() }).eq('id', podId);
+    setPods(prev => prev.map(p => p.id === podId ? { ...p, archivedAt: new Date().toISOString() } : p));
   };
 
   const handleCreateBrand = async (name: string, slug: string, podId: string, notificationEmail: string) => {
-      const rawKey = generateAccessKey();
-      const accessKeyHash = await hashAccessKey(rawKey);
-      const brandSlug = (slug || slugFromName(name)).toLowerCase().trim();
-      const { data, error } = await supabase.from('brands').insert({
-          name,
-          slug: brandSlug,
-          pod_id: podId,
-          access_key_hash: accessKeyHash,
-          is_active: true,
-          notification_email: notificationEmail || null,
-      }).select().single();
-      if (!error && data) {
-          setBrands(prev => [...prev, { id: data.id, name: data.name, slug: data.slug, podId: data.pod_id }]);
-          setNewKeyReveal({ brandId: data.id, slug: brandSlug, key: rawKey });
-      }
+    const shareToken = generateShareToken();
+    const rawKey = generateAccessKey();
+    const accessKeyHash = await hashAccessKey(rawKey);
+    const brandSlug = (slug || slugFromName(name)).toLowerCase().trim();
+    const { data, error } = await supabase.from('brands').insert({
+      name,
+      slug: brandSlug,
+      pod_id: podId,
+      share_token: shareToken,
+      access_key_hash: accessKeyHash,
+      is_active: true,
+      notification_email: notificationEmail || null,
+    }).select().single();
+    if (!error && data) {
+      setBrands(prev => [...prev, { id: data.id, name: data.name, slug: data.slug, podId: data.pod_id, shareToken: data.share_token }]);
+      copyToClipboard(dropLink(data.share_token));
+    }
   };
 
   const handleSaveBrand = async (brandId: string, updates: { name?: string; slug?: string; pod_id?: string; notification_email?: string }) => {
-      await supabase.from('brands').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', brandId);
-      setBrands(prev => prev.map(b => b.id === brandId ? { ...b, ...updates } : b));
-  };
-
-  const handleChangeAccessKeyOpen = (brandId: string, slug: string) => {
-      setChangeKeyBrand({ brandId, slug });
-      setChangeKeyConfirm('');
-      setChangeKeyError(null);
-      setChangeKeyNewKey(null);
-  };
-
-  const handleChangeAccessKeyClose = () => {
-      setChangeKeyBrand(null);
-      setChangeKeyConfirm('');
-      setChangeKeyError(null);
-      setChangeKeyNewKey(null);
-  };
-
-  const handleConfirmChangeKey = async () => {
-      if (!changeKeyBrand || changeKeyConfirm.trim() !== CONFIRM_PHRASE) return;
-      setChangeKeyLoading(true);
-      setChangeKeyError(null);
-      try {
-        const rawKey = generateAccessKey();
-        const accessKeyHash = await hashAccessKey(rawKey);
-        const { error } = await supabase
-          .from('brands')
-          .update({ access_key_hash: accessKeyHash, updated_at: new Date().toISOString() })
-          .eq('id', changeKeyBrand.brandId);
-        if (error) throw error;
-        setChangeKeyNewKey(rawKey);
-      } catch {
-        setChangeKeyError('Unable to change access key. Please try again.');
-      } finally {
-        setChangeKeyLoading(false);
-      }
+    await supabase.from('brands').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', brandId);
+    setBrands(prev => prev.map(b => b.id === brandId ? { ...b, ...updates } : b));
   };
 
   const handleArchiveBrand = async (brandId: string) => {
-      if (!confirm('Archive this brand? The drop link will stop working.')) return;
-      await supabase.from('brands').update({ archived_at: new Date().toISOString() }).eq('id', brandId);
-      setBrands(prev => prev.map(b => b.id === brandId ? { ...b, archivedAt: new Date().toISOString() } : b));
+    if (!confirm('Archive this brand? The drop link will stop working.')) return;
+    await supabase.from('brands').update({ archived_at: new Date().toISOString() }).eq('id', brandId);
+    setBrands(prev => prev.map(b => b.id === brandId ? { ...b, archivedAt: new Date().toISOString() } : b));
   };
 
-  const dropLink = (slug: string, key?: string) => {
-      const base = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname || ''}#/drop/${slug}` : `/#/drop/${slug}`;
-      return key ? `${base}?key=${key}` : base;
+  const dropLink = (shareToken: string) => {
+    if (typeof window === 'undefined') return `/#/drop/${shareToken}`;
+    const origin = window.location.origin;
+    const path = window.location.pathname || '/';
+    return `${origin}${path}#/drop/${shareToken}`;
   };
 
   const copyToClipboard = (text: string) => {
-      navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text);
   };
 
   const getAvailability = (count: number) => {
-      if (count <= 2) return { label: 'Free', cls: 'bg-green-100 text-green-700' };
-      if (count <= 5) return { label: 'Busy', cls: 'bg-amber-100 text-amber-700' };
-      return { label: 'Overloaded', cls: 'bg-red-100 text-red-600' };
+    if (count <= 2) return { label: 'Free', cls: 'bg-green-100 text-green-700' };
+    if (count <= 5) return { label: 'Busy', cls: 'bg-amber-100 text-amber-700' };
+    return { label: 'Overloaded', cls: 'bg-red-100 text-red-600' };
   };
 
   return (
     <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 flex flex-col bg-white font-sans overflow-hidden">
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="w-full max-w-2xl mx-auto px-8 pt-24 pb-12">
-        
+
         <button onClick={() => navigate('/')} className="flex items-center gap-2 text-sm text-[#6B6B6B] hover:text-[#111111] mb-8 transition-colors">
           <ArrowLeft size={16} />
           Back to Dashboard
@@ -342,226 +359,200 @@ export const SettingsPage: React.FC = () => {
           )}
 
           {isAdmin && (
-              <>
-                <section className="bg-gray-50 p-6 rounded-2xl">
-                    <div className="flex items-center gap-2 mb-4 text-[#111111]">
-                        <BarChart size={18} />
-                        <h2 className="font-bold">Team Workload</h2>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-4">Briefs in progress / review.</p>
-                    <div className="space-y-3">
-                        {profiles.filter((p: any) => p.role !== 'client').map((p: any) => {
-                            const count = briefs.filter((b: any) => b.ownerId === p.id && ['new', 'in_progress', 'review'].includes(b.status)).length;
-                            const avail = getAvailability(count);
-                            return (
-                                <div key={p.id} className="flex items-center justify-between text-sm">
-                                    <span>{p.name || p.email}</span>
-                                    <span className={`text-xs font-bold px-2 py-1 rounded ${avail.cls}`}>
-                                        {count} Active · {avail.label}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </section>
-
-                <section className="bg-white border border-gray-100 p-6 rounded-2xl shadow-sm">
-                    <div className="flex items-center gap-2 mb-6 text-[#111111]">
-                        <Building2 size={18} />
-                        <h2 className="font-bold">Assign Pod Leads</h2>
-                    </div>
-                    <div className="space-y-3 mb-8">
-                        {activePods(pods).map(pod => (
-                            <div key={pod.id} className="flex items-center justify-between gap-4 p-3 bg-gray-50 rounded-xl">
-                                <span className="text-sm font-medium">{pod.name}</span>
-                                <select
-                                    value={pod.leadId || ''}
-                                    onChange={(e) => handleSetPodLead(pod.id, e.target.value)}
-                                    className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1 outline-none max-w-[180px]"
-                                >
-                                    <option value="">No lead</option>
-                                    {profiles.filter((p: any) => ['pod_member', 'pod_lead', 'admin'].includes(p.role)).map((p: any) => (
-                                        <option key={p.id} value={p.id}>{p.name || p.email}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-
-                <section className="bg-white border border-gray-100 p-6 rounded-2xl shadow-sm">
-                    <div className="flex items-center gap-2 mb-6 text-[#111111]">
-                        <Users size={18} />
-                        <h2 className="font-bold">Manage People</h2>
-                    </div>
-
-                    {/* Role error toast */}
-                    {roleError && (
-                      <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-lg">
-                        {roleError}
+            <>
+              <section className="bg-gray-50 p-6 rounded-2xl">
+                <div className="flex items-center gap-2 mb-4 text-[#111111]">
+                  <BarChart size={18} />
+                  <h2 className="font-bold">Team Workload</h2>
+                </div>
+                <p className="text-xs text-gray-500 mb-4">Briefs in progress / review.</p>
+                <div className="space-y-3">
+                  {profiles.map(p => {
+                    const count = briefs.filter((b: any) => b.ownerId === p.id && ['new', 'in_progress', 'review'].includes(b.status)).length;
+                    const avail = getAvailability(count);
+                    return (
+                      <div key={p.id} className="flex items-center justify-between text-sm">
+                        <span>{p.name || p.email}</span>
+                        <span className={`text-xs font-bold px-2 py-1 rounded ${avail.cls}`}>
+                          {count} Active · {avail.label}
+                        </span>
                       </div>
-                    )}
+                    );
+                  })}
+                </div>
+              </section>
 
-                    <div className="space-y-4">
-                        {/* Filter out any legacy client profiles - they shouldn't exist */}
-                        {profiles.filter(u => u.role !== 'client').map(user => (
-                            <div key={user.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-gray-50 rounded-xl">
-                                <div className="min-w-0">
-                                    <p className="text-sm font-medium truncate">{user.name || user.email}</p>
-                                    <p className="text-xs text-gray-400">{user.email}</p>
-                                </div>
-                                
-                                <div className="flex flex-wrap gap-2">
-                                    {/* Role Selector - Internal roles only (no client) */}
-                                    <select
-                                        value={user.role === 'client' ? 'pod_member' : user.role}
-                                        onChange={(e) => handleUpdateRole(user.id, e.target.value)}
-                                        className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1 outline-none"
-                                    >
-                                        <option value="admin">Admin</option>
-                                        <option value="pod_lead">Pod Lead</option>
-                                        <option value="pod_member">Pod Member</option>
-                                    </select>
-
-                                    {/* Pod Selector - Show for pod_lead and pod_member only (admin doesn't need pod) */}
-                                    {(user.role === 'pod_lead' || user.role === 'pod_member') && (
-                                      <select
-                                          value={user.pod_id || ''}
-                                          onChange={(e) => handleUpdatePod(user.id, e.target.value)}
-                                          className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1 outline-none max-w-[100px]"
-                                      >
-                                          <option value="">No Pod</option>
-                                          {activePods(pods).map(pod => (
-                                              <option key={pod.id} value={pod.id}>{pod.name}</option>
-                                          ))}
-                                      </select>
-                                    )}
-                                </div>
-                            </div>
+              <section className="bg-white border border-gray-100 p-6 rounded-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-6 text-[#111111]">
+                  <Building2 size={18} />
+                  <h2 className="font-bold">Assign Pod Leads</h2>
+                </div>
+                <div className="space-y-3 mb-8">
+                  {activePods(pods).map(pod => (
+                    <div key={pod.id} className="flex items-center justify-between gap-4 p-3 bg-gray-50 rounded-xl">
+                      <span className="text-sm font-medium">{pod.name}</span>
+                      <select
+                        value={pod.leadId || ''}
+                        onChange={(e) => handleSetPodLead(pod.id, e.target.value)}
+                        className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1 outline-none max-w-[180px]"
+                      >
+                        <option value="">No lead</option>
+                        {profiles.map(p => (
+                          <option key={p.id} value={p.id}>{p.name || p.email}</option>
                         ))}
+                      </select>
                     </div>
-                                </section>
+                  ))}
+                </div>
+              </section>
 
-                <section className="bg-white border border-gray-100 p-6 rounded-2xl shadow-sm">
-                    <div className="flex items-center gap-2 mb-6 text-[#111111]">
-                        <Layers size={18} />
-                        <h2 className="font-bold">Pods and Brands</h2>
+              <section className="bg-white border border-gray-100 p-6 rounded-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-6 text-[#111111]">
+                  <Users size={18} />
+                  <h2 className="font-bold">Manage People</h2>
+                </div>
+
+                {/* Role error toast */}
+                {roleError && (
+                  <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-lg">
+                    {roleError}
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  {profiles.map(user => (
+                    <div key={user.id} className="p-4 bg-gray-50 rounded-xl space-y-3">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{user.name || user.email}</p>
+                          <p className="text-xs text-gray-400">{user.email}</p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {/* Role Selector - Admin or User */}
+                          <select
+                            value={user.role}
+                            onChange={(e) => handleUpdateRole(user.id, e.target.value)}
+                            className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1 outline-none"
+                          >
+                            <option value="admin">Admin</option>
+                            <option value="user">User</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Memberships - only show for non-admin users */}
+                      {user.role !== 'admin' && (
+                        <div className="pt-2 border-t border-gray-200">
+                          <p className="text-xs text-gray-500 mb-2">Pod Memberships:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {user.memberships.filter(m => m.status === 'active').map(m => {
+                              const pod = pods.find(p => p.id === m.pod_id);
+                              return (
+                                <div key={m.id} className="flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg">
+                                  <span className="text-xs">{pod?.name || 'Unknown'}</span>
+                                  <select
+                                    value={m.role}
+                                    onChange={(e) => handleUpdateMembershipRole(m.id, e.target.value as MembershipRole)}
+                                    className="text-[10px] bg-gray-100 border-0 rounded px-1 py-0.5"
+                                  >
+                                    <option value="pod_member">Member</option>
+                                    <option value="pod_lead">Lead</option>
+                                  </select>
+                                  <button
+                                    onClick={() => handleRemoveMembership(m.id)}
+                                    className="text-red-500 hover:text-red-700 text-xs ml-1"
+                                    title="Remove from pod"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              );
+                            })}
+
+                            {/* Add to pod dropdown */}
+                            <div className="relative">
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    handleAddMembership(user.id, e.target.value, 'pod_member');
+                                  }
+                                }}
+                                className="text-xs bg-gray-100 border border-gray-200 rounded-lg px-2 py-1 outline-none"
+                              >
+                                <option value="">+ Add to pod</option>
+                                {activePods(pods)
+                                  .filter(pod => !user.memberships.some(m => m.pod_id === pod.id))
+                                  .map(pod => (
+                                    <option key={pod.id} value={pod.id}>{pod.name}</option>
+                                  ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Admin note */}
+                      {user.role === 'admin' && (
+                        <p className="text-xs text-gray-400 italic pt-2 border-t border-gray-200">
+                          Admins have access to all pods
+                        </p>
+                      )}
                     </div>
-                    <div className="flex border-b border-gray-100 mb-4">
-                        <button
-                            type="button"
-                            onClick={() => setPodsBrandsTab('pods')}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${podsBrandsTab === 'pods' ? 'border-[#111111] text-[#111111]' : 'border-transparent text-gray-500 hover:text-[#111111]'}`}
-                        >
-                            <ChevronRight size={14} /> Pods
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setPodsBrandsTab('brands')}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${podsBrandsTab === 'brands' ? 'border-[#111111] text-[#111111]' : 'border-transparent text-gray-500 hover:text-[#111111]'}`}
-                        >
-                            <Tag size={14} /> Brands
-                        </button>
-                    </div>
+                  ))}
+                </div>
+              </section>
 
-                    {podsBrandsTab === 'pods' && (
-                        <PodsTab
-                            pods={pods}
-                            profiles={profiles}
-                            onCreatePod={handleCreatePod}
-                            onUpdatePod={handleSavePod}
-                            onArchivePod={handleArchivePod}
-                            slugFromName={slugFromName}
-                        />
-                    )}
-                    {podsBrandsTab === 'brands' && (
-                        <BrandsTab
-                            brands={brands}
-                            pods={activePods(pods)}
-                            newKeyReveal={newKeyReveal}
-                            onCloseKeyReveal={() => setNewKeyReveal(null)}
-                            onChangeAccessKey={handleChangeAccessKeyOpen}
-                            onCreateBrand={handleCreateBrand}
-                            onUpdateBrand={handleSaveBrand}
-                            onArchiveBrand={handleArchiveBrand}
-                            dropLink={dropLink}
-                            copyToClipboard={copyToClipboard}
-                            slugFromName={slugFromName}
-                        />
-                    )}
-                </section>
-              </>
-          )}
-
-          {newKeyReveal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setNewKeyReveal(null)}>
-              <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-gray-100" onClick={e => e.stopPropagation()}>
-                <h3 className="font-bold text-[#111111] mb-2">Access key (show once)</h3>
-                <p className="text-xs text-gray-500 mb-4">Use &quot;Copy link&quot; to share the full URL—the client opens it directly without typing the key.</p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <button type="button" onClick={() => copyToClipboard(dropLink(newKeyReveal.slug, newKeyReveal.key))} className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg text-sm font-medium hover:bg-gray-200">
-                    <Copy size={14} /> Copy link
+              <section className="bg-white border border-gray-100 p-6 rounded-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-6 text-[#111111]">
+                  <Layers size={18} />
+                  <h2 className="font-bold">Pods and Brands</h2>
+                </div>
+                <div className="flex border-b border-gray-100 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setPodsBrandsTab('pods')}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${podsBrandsTab === 'pods' ? 'border-[#111111] text-[#111111]' : 'border-transparent text-gray-500 hover:text-[#111111]'}`}
+                  >
+                    <ChevronRight size={14} /> Pods
                   </button>
-                  <button type="button" onClick={() => copyToClipboard(newKeyReveal.key)} className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg text-sm font-medium hover:bg-gray-200">
-                    <Copy size={14} /> Copy access key
+                  <button
+                    type="button"
+                    onClick={() => setPodsBrandsTab('brands')}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${podsBrandsTab === 'brands' ? 'border-[#111111] text-[#111111]' : 'border-transparent text-gray-500 hover:text-[#111111]'}`}
+                  >
+                    <Tag size={14} /> Brands
                   </button>
                 </div>
-                <p className="text-xs text-gray-400 break-all font-mono mb-4">{newKeyReveal.key}</p>
-                <button type="button" onClick={() => setNewKeyReveal(null)} className="w-full py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50">Done</button>
-              </div>
-            </div>
-          )}
 
-          {changeKeyBrand && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={handleChangeAccessKeyClose}>
-              <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-gray-100" onClick={e => e.stopPropagation()}>
-                <h3 className="font-bold text-[#111111] mb-2">Change access key</h3>
-                {changeKeyNewKey ? (
-                  <>
-                    <p className="text-sm text-[#111111] mb-2">Access key updated. This key will be shown once. Copy and store it securely.</p>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      <button type="button" onClick={() => copyToClipboard(changeKeyNewKey)} className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg text-sm font-medium hover:bg-gray-200">
-                        <Copy size={14} /> Copy access key
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-4">Anyone without this key will be denied access.</p>
-                    <button type="button" onClick={handleChangeAccessKeyClose} className="w-full py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50">Done</button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm text-[#111111] mb-2">This will replace the current access key for this brand. Anyone using the old key will lose access immediately.</p>
-                    <p className="text-xs text-gray-500 mb-4">Only share the new key with trusted contacts. This action cannot be undone.</p>
-                    <label className="block text-xs font-medium text-[#111111] mb-1">Type CHANGE KEY to confirm</label>
-                    <input
-                      type="text"
-                      placeholder="CHANGE KEY"
-                      value={changeKeyConfirm}
-                      onChange={(e) => { setChangeKeyConfirm(e.target.value); setChangeKeyError(null); }}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-1"
-                    />
-                    {changeKeyConfirm.length > 0 && (
-                      <p className="text-xs text-amber-700 mb-3">This will invalidate the existing access key.</p>
-                    )}
-                    {changeKeyError && <p className="text-xs text-red-600 mb-3">{changeKeyError}</p>}
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={handleConfirmChangeKey}
-                        disabled={changeKeyConfirm.trim() !== CONFIRM_PHRASE || changeKeyLoading}
-                        className="flex-1 py-2 bg-[#111111] text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:pointer-events-none"
-                      >
-                        {changeKeyLoading ? 'Changing key…' : 'Change key'}
-                      </button>
-                      <button type="button" onClick={handleChangeAccessKeyClose} className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-2">No changes will be made.</p>
-                  </>
+                {podsBrandsTab === 'pods' && (
+                  <PodsTab
+                    pods={pods}
+                    profiles={profiles}
+                    onCreatePod={handleCreatePod}
+                    onUpdatePod={handleSavePod}
+                    onArchivePod={handleArchivePod}
+                    slugFromName={slugFromName}
+                  />
                 )}
-              </div>
-            </div>
+                {podsBrandsTab === 'brands' && (
+                  <BrandsTab
+                    brands={brands}
+                    pods={activePods(pods)}
+                    onCreateBrand={handleCreateBrand}
+                    onUpdateBrand={handleSaveBrand}
+                    onArchiveBrand={handleArchiveBrand}
+                    dropLink={dropLink}
+                    copyToClipboard={copyToClipboard}
+                    slugFromName={slugFromName}
+                  />
+                )}
+              </section>
+            </>
           )}
 
-          <button 
+          <button
             onClick={async () => {
               await signOut();
               navigate('/login');

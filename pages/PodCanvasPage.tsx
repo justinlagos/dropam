@@ -18,21 +18,19 @@ import { getFolderContextMenuItems, getCanvasContextMenuItems } from '../actions
 export const PodCanvasPage: React.FC = () => {
   const { podSlug } = useParams<{ podSlug: string }>();
   const { pods, briefs, brands, folders, loading } = useData();
-  const { currentUser, checkPermission } = useUser();
+  const { currentUser, checkPermission, hasPodAccess } = useUser();
   const actions = useActions();
   const navigate = useNavigate();
   const { updateBriefPosition, updateFolderPosition, moveBriefToFolder, createFolder, updateBriefStatus, deleteBrief, deleteFolder, assignBrief, updateBriefMeta, updateBriefTitle, updateFolderName } = actions;
 
   const pod = pods.find(p => p.slug === podSlug);
 
-  // Security: Check if user has access to this pod
+  // Security: Check if user has access to this pod via memberships
   const hasAccess = useMemo(() => {
     if (!currentUser || !pod) return false;
-    // Admins can access any pod
-    if (currentUser.role === 'admin') return true;
-    // Pod leads and members can only access their assigned pod
-    return currentUser.podId === pod.id;
-  }, [currentUser, pod]);
+    // Use membership-based access check
+    return hasPodAccess(pod.id);
+  }, [currentUser, pod, hasPodAccess]);
 
   // Redirect unauthorized users
   useEffect(() => {

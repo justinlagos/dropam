@@ -1,6 +1,6 @@
-// POST: Add client message to a brief. Body: brandSlug, accessKey, briefId, message
+// POST: Add client message to a brief. Body: shareToken, briefId, message
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { validateBrandAccess } from "../_shared/brandAuth.ts";
+import { validateBrandByShareToken } from "../_shared/brandAuth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -13,26 +13,25 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  let body: { brandSlug?: string; accessKey?: string; key?: string; briefId?: string; message?: string };
+  let body: { shareToken?: string; briefId?: string; message?: string };
   try {
     body = await req.json();
   } catch {
     return jsonResponse({ error: "Invalid JSON" }, 400);
   }
 
-  const brandSlug = body.brandSlug ?? null;
-  const accessKey = body.accessKey ?? body.key ?? null;
+  const shareToken = body.shareToken ?? null;
   const briefId = body.briefId ?? null;
   const text = body.message ?? body.text ?? "";
 
-  if (!brandSlug || !accessKey) {
-    return jsonResponse({ error: "brandSlug and accessKey required" }, 400);
+  if (!shareToken || !shareToken.trim()) {
+    return jsonResponse({ error: "shareToken required" }, 400);
   }
   if (!briefId || !text.trim()) {
     return jsonResponse({ error: "briefId and message required" }, 400);
   }
 
-  const result = await validateBrandAccess(brandSlug, accessKey);
+  const result = await validateBrandByShareToken(shareToken.trim());
   if ("error" in result) {
     return jsonResponse({ error: result.error }, result.status ?? 401);
   }

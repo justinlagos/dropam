@@ -68,7 +68,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         id: p.id, name: p.name, slug: p.slug, description: p.description, leadName: p.lead_name, leadId: p.lead_id, archivedAt: p.archived_at
       })));
       if (brandsData) setBrands(brandsData.map((b: any) => ({
-        id: b.id, name: b.name, slug: b.slug, podId: b.pod_id, isActive: b.is_active, notificationEmail: b.notification_email, archivedAt: b.archived_at, createdAt: b.created_at, updatedAt: b.updated_at
+        id: b.id, name: b.name, slug: b.slug, podId: b.pod_id, shareToken: b.share_token, isActive: b.is_active, notificationEmail: b.notification_email, archivedAt: b.archived_at, createdAt: b.created_at, updatedAt: b.updated_at
       })));
       if (foldersData) setFolders(foldersData.map((f: any) => ({
         id: f.id, podId: f.pod_id, name: f.name, position: { x: Number(f.position_x), y: Number(f.position_y) }, createdAt: f.created_at

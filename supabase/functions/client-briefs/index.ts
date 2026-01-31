@@ -1,9 +1,9 @@
-// GET: List briefs for brand (client-visible only). Query: brandSlug, accessKey (or key)
-// POST: Create brief + upload file. Body: brandSlug, accessKey, title?, file (base64 or multipart)
+// GET: List briefs for brand (client-visible only). Query: shareToken
+// POST: Create brief + upload file. Body: shareToken, title?, file (base64 or multipart)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  validateBrandAccess,
-  getBrandSlugAndAccessKeyFromUrl,
+  validateBrandByShareToken,
+  getShareTokenFromRequest,
 } from "../_shared/brandAuth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -21,14 +21,11 @@ Deno.serve(async (req: Request) => {
   }
 
   if (req.method === "GET") {
-    const { brandSlug, accessKey } = getBrandSlugAndAccessKeyFromUrl(req);
-    if (!brandSlug || !accessKey) {
-      return jsonResponse(
-        { error: "brandSlug and accessKey (or key) required" },
-        400
-      );
+    const shareToken = getShareTokenFromRequest(req);
+    if (!shareToken) {
+      return jsonResponse({ error: "shareToken required" }, 400);
     }
-    const result = await validateBrandAccess(brandSlug, accessKey);
+    const result = await validateBrandByShareToken(shareToken);
     if ("error" in result) {
       return jsonResponse({ error: result.error }, result.status ?? 401);
     }
@@ -102,16 +99,14 @@ Deno.serve(async (req: Request) => {
 
   if (req.method === "POST") {
     const contentType = req.headers.get("content-type") ?? "";
-    let brandSlug: string | null = null;
-    let accessKey: string | null = null;
+    let shareToken: string | null = null;
     let title = "Untitled brief";
     let fileBlob: Blob | null = null;
     let fileName = "brief";
 
     if (contentType.includes("multipart/form-data")) {
       const form = await req.formData();
-      brandSlug = form.get("brandSlug") as string | null;
-      accessKey = (form.get("accessKey") ?? form.get("key")) as string | null;
+      shareToken = form.get("shareToken") as string | null;
       title = (form.get("title") as string) ?? "Untitled brief";
       const file = form.get("file") as File | null;
       if (file) {
@@ -120,14 +115,13 @@ Deno.serve(async (req: Request) => {
         if (!title || title === "Untitled brief") title = file.name;
       }
     } else {
-      let body: { brandSlug?: string; accessKey?: string; key?: string; title?: string; fileName?: string; fileData?: string };
+      let body: { shareToken?: string; title?: string; fileName?: string; fileData?: string };
       try {
         body = await req.json();
       } catch {
         return jsonResponse({ error: "Invalid JSON" }, 400);
       }
-      brandSlug = body.brandSlug ?? null;
-      accessKey = body.accessKey ?? body.key ?? null;
+      shareToken = body.shareToken ?? null;
       title = body.title ?? body.fileName ?? "Untitled brief";
       fileName = body.fileName ?? title;
       if (body.fileData && fileName) {
@@ -140,11 +134,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (!brandSlug || !accessKey) {
-      return jsonResponse({ error: "brandSlug and accessKey required" }, 400);
+    if (!shareToken || !shareToken.trim()) {
+      return jsonResponse({ error: "shareToken required" }, 400);
     }
 
-    const result = await validateBrandAccess(brandSlug, accessKey);
+    const result = await validateBrandByShareToken(shareToken.trim());
     if ("error" in result) {
       return jsonResponse({ error: result.error }, result.status ?? 401);
     }

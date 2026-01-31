@@ -48,6 +48,17 @@ const RootRedirect: React.FC = () => {
         return <Navigate to="/admin" replace />;
     }
 
+    // Check memberships for pod access
+    const activeMemberships = currentUser.memberships?.filter(m => m.status === 'active') || [];
+
+    if (activeMemberships.length > 0) {
+        // Redirect to first active membership's pod
+        const firstMembership = activeMemberships[0];
+        const pod = activePods.find((p: { id: string }) => p.id === firstMembership.podId);
+        if (pod) return <Navigate to={`/pod/${pod.slug}`} replace />;
+    }
+
+    // Fallback: check legacy podId field for backward compatibility
     if (currentUser.podId) {
         const pod = activePods.find((p: { id: string }) => p.id === currentUser.podId);
         if (pod) return <Navigate to={`/pod/${pod.slug}`} replace />;
@@ -68,7 +79,7 @@ const App: React.FC = () => {
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/logout" element={<LogoutRedirect />} />
               
-              <Route path="/drop/:brandSlug" element={<ClientDropPage />} />
+              <Route path="/drop/:shareToken" element={<ClientDropPage />} />
               
               <Route path="/no-access" element={
                   <ProtectedRoute><NoAccessPage /></ProtectedRoute>

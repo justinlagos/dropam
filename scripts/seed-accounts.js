@@ -91,9 +91,17 @@ function slugFromName(name) {
   return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
-// Match app's brandKey: SHA-256 then hex (so client verification works)
+// Match Edge normalizeAccessKey: trim, collapse whitespace
+function normalizeAccessKey(input) {
+  const s = String(input ?? '').trim();
+  const collapsed = s.replace(/\s+/g, ' ').trim();
+  return collapsed.length > 0 ? collapsed : null;
+}
+
+// Match app's brandKey: SHA-256 then hex (so client verification works). Normalize before hashing.
 function hashAccessKey(key) {
-  return createHash('sha256').update(key, 'utf8').digest('hex');
+  const normalized = normalizeAccessKey(key) ?? key;
+  return createHash('sha256').update(normalized, 'utf8').digest('hex');
 }
 
 function generateAccessKey() {

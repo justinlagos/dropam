@@ -72,3 +72,8 @@ if (isPlaceholder) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
+
+/** Single source of truth for Supabase URL. Use for Edge Function base URL so client and verify never diverge. */
+export function getSupabaseUrl(): string {
+  return supabaseUrl;
+}
