@@ -1,6 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { useUser } from '../contexts/UserContext';
 import { useActions } from '../contexts/ActionContext';
@@ -9,7 +9,7 @@ import { FolderIcon } from '../components/FolderIcon';
 import { SidePanel } from '../components/SidePanel';
 import { SpatialCanvas } from '../components/SpatialCanvas';
 import { Brief } from '../types';
-import { Search, Loader2 } from 'lucide-react';
+import { Search, Loader2, ShieldAlert } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ContextMenu } from '../components/ContextMenu';
 import { getBriefContextMenuItems } from '../actions/briefActions';
@@ -20,9 +20,27 @@ export const PodCanvasPage: React.FC = () => {
   const { pods, briefs, brands, folders, loading } = useData();
   const { currentUser, checkPermission } = useUser();
   const actions = useActions();
+  const navigate = useNavigate();
   const { updateBriefPosition, updateFolderPosition, moveBriefToFolder, createFolder, updateBriefStatus, deleteBrief, deleteFolder, assignBrief, updateBriefMeta, updateBriefTitle, updateFolderName } = actions;
-  
+
   const pod = pods.find(p => p.slug === podSlug);
+
+  // Security: Check if user has access to this pod
+  const hasAccess = useMemo(() => {
+    if (!currentUser || !pod) return false;
+    // Admins can access any pod
+    if (currentUser.role === 'admin') return true;
+    // Pod leads and members can only access their assigned pod
+    return currentUser.podId === pod.id;
+  }, [currentUser, pod]);
+
+  // Redirect unauthorized users
+  useEffect(() => {
+    if (!loading && pod && currentUser && !hasAccess) {
+      navigate('/no-access', { replace: true });
+    }
+  }, [loading, pod, currentUser, hasAccess, navigate]);
+
   const [selectedBrief, setSelectedBrief] = useState<Brief | null>(null);
   const [panelState, setPanelState] = useState<{ activeTab?: 'details' | 'messages', messageFilter?: 'internal' | 'client' }>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,7 +50,17 @@ export const PodCanvasPage: React.FC = () => {
   const [panelFocusMeta, setPanelFocusMeta] = useState(false);
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
-  if (!pod) return <div>Pod not found</div>;
+  if (!pod) return <div className="h-screen flex items-center justify-center text-gray-500">Pod not found</div>;
+
+  // Show access denied briefly before redirect
+  if (!hasAccess) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-[#F5F5F7] text-[#111111] gap-4">
+        <ShieldAlert size={32} className="text-gray-400" />
+        <p className="text-sm text-gray-500">You don't have access to this pod.</p>
+      </div>
+    );
+  }
 
   const podBriefs = briefs.filter(b => b.podId === pod.id);
   const podFolders = folders.filter(f => f.podId === pod.id);

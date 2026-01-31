@@ -2,8 +2,8 @@
  * Admin-only canvas: all briefs and folders from all pods on one white canvas.
  * Must comply with docs/DROPAM_CORE.md, docs/DROPAM_COPY.md, docs/DROPAM_STATE.md, docs/DROPAM_FLOW.md.
  */
-import React, { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { useUser } from '../contexts/UserContext';
 import { useActions } from '../contexts/ActionContext';
@@ -13,7 +13,7 @@ import { SidePanel } from '../components/SidePanel';
 import { FolderSidePanel } from '../components/FolderSidePanel';
 import { SpatialCanvas } from '../components/SpatialCanvas';
 import { Brief, Folder } from '../types';
-import { Search, Loader2 } from 'lucide-react';
+import { Search, Loader2, ShieldAlert } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { ContextMenu } from '../components/ContextMenu';
 import { getBriefContextMenuItems } from '../actions/briefActions';
@@ -22,6 +22,14 @@ import { getFolderContextMenuItems, getCanvasContextMenuItems } from '../actions
 export const AdminCanvasPage: React.FC = () => {
   const { pods, briefs, brands, folders, loading, refetchSilent } = useData();
   const { currentUser, checkPermission } = useUser();
+  const navigate = useNavigate();
+
+  // Security: Redirect non-admins
+  useEffect(() => {
+    if (!loading && currentUser && currentUser.role !== 'admin') {
+      navigate('/no-access', { replace: true });
+    }
+  }, [loading, currentUser, navigate]);
   const actions = useActions();
   const { updateBriefPosition, updateFolderPosition, moveBriefToFolder, createFolder, updateBriefStatus, deleteBrief, deleteFolder, assignBrief, updateBriefMeta, updateBriefTitle, updateFolderName } = actions;
 
@@ -69,14 +77,21 @@ export const AdminCanvasPage: React.FC = () => {
   const firstPodId = activePods[0]?.id;
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
-  if (currentUser?.role !== 'admin') return <div>Admin only</div>;
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-[#F5F5F7] text-[#111111] gap-4">
+        <ShieldAlert size={32} className="text-gray-400" />
+        <p className="text-sm text-gray-500">Admin access required</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#F5F5F7] overflow-hidden">
-      <div className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-gray-100 bg-white/50 backdrop-blur-sm">
+    <div className="h-screen w-screen flex flex-col bg-white overflow-hidden">
+      <div className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-gray-100 bg-white backdrop-blur-sm">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-4">
-            <h1 className="text-lg font-bold text-[#111111] tracking-tight">All pods</h1>
+            <h1 className="text-lg font-bold text-[#111111] tracking-tight">All PODS</h1>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -92,8 +107,8 @@ export const AdminCanvasPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 flex min-h-0">
-        <div className="flex-1 min-w-0 relative">
+      <div className="flex-1 flex min-h-0 bg-white">
+        <div className="flex-1 min-w-0 relative bg-white">
           <SpatialCanvas
             onLassoSelect={handleLassoSelect}
             onCanvasClick={() => {

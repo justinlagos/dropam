@@ -5,6 +5,7 @@ import { DataProvider, useData } from './contexts/DataContext';
 import { ActionProvider } from './contexts/ActionContext';
 import { ClientDropPage } from './pages/ClientDropPage';
 import { PodCanvasPage } from './pages/PodCanvasPage';
+import { AdminCanvasPage } from './pages/AdminCanvasPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { NoAccessPage } from './pages/NoAccessPage';
 import { LoginPage } from './pages/LoginPage';
@@ -42,13 +43,14 @@ const RootRedirect: React.FC = () => {
     if (isLoading || dataLoading) return <LoadingScreen />;
     if (!currentUser) return <Navigate to="/login" replace />;
 
+    // Admin always lands on the All PODS dashboard (all briefs on one canvas)
+    if (currentUser.role === 'admin') {
+        return <Navigate to="/admin" replace />;
+    }
+
     if (currentUser.podId) {
         const pod = activePods.find((p: { id: string }) => p.id === currentUser.podId);
         if (pod) return <Navigate to={`/pod/${pod.slug}`} replace />;
-    }
-
-    if (currentUser.role === 'admin' && activePods.length > 0) {
-        return <Navigate to={`/pod/${activePods[0].slug}`} replace />;
     }
 
     return <Navigate to="/no-access" replace />;
@@ -74,6 +76,9 @@ const App: React.FC = () => {
               
               <Route path="/pod/:podSlug" element={
                   <ProtectedRoute><PodCanvasPage /></ProtectedRoute>
+              } />
+              <Route path="/admin" element={
+                  <ProtectedRoute><AdminCanvasPage /></ProtectedRoute>
               } />
               
               <Route path="/settings" element={

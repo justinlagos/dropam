@@ -1,14 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUser } from '../contexts/UserContext';
 import { useData } from '../contexts/DataContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, LayoutGrid, Droplets, Database, Loader2 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 
 export const NoAccessPage: React.FC = () => {
   const { currentUser, refetchUser } = useUser();
   const { pods, brands, loading } = useData();
+  const navigate = useNavigate();
   const [seeding, setSeeding] = useState(false);
+
+  // Admins should always use the All PODS dashboard, not this page
+  useEffect(() => {
+    if (currentUser?.role === 'admin') {
+      navigate('/admin', { replace: true });
+    }
+  }, [currentUser?.role, navigate]);
 
   const handleInitialize = async () => {
     setSeeding(true);
@@ -92,6 +100,9 @@ export const NoAccessPage: React.FC = () => {
   const clientNoBrand = isClient && !currentUser.brandId;
   const podMemberNoPod = isPodMember && !currentUser.podId;
 
+  // Admins are redirected to /admin by useEffect; avoid flashing no-access content
+  if (isAdmin) return null;
+
   // Pod members without a pod should see a simple "contact admin" message
   if (podMemberNoPod && pods.length > 0) {
     return (
@@ -136,6 +147,13 @@ export const NoAccessPage: React.FC = () => {
                         <LayoutGrid size={20} />
                         <h2 className="font-bold">Active Pods</h2>
                     </div>
+                    <Link
+                        to="/admin"
+                        className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors group mb-2 border border-gray-100"
+                    >
+                        <span className="text-sm font-medium text-gray-700 group-hover:text-[#111111]">All PODS</span>
+                        <ArrowRight size={14} className="text-gray-300 group-hover:text-[#111111] transition-colors" />
+                    </Link>
 
                     {loading ? (
                         <div className="h-20 flex items-center justify-center text-xs text-gray-400">Loading Pods...</div>

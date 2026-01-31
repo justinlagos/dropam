@@ -56,6 +56,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const msg = "Database tables missing. Run supabase_schema.sql";
             console.error(msg);
             setError(msg);
+            setCurrentUser({ ...fallbackUser, podId: undefined, brandId: undefined });
             return;
         }
         
@@ -109,22 +110,43 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let mounted = true;
     let profileLoaded = false;
 
+    const SYNC_TIMEOUT_MS = 8000;
+
     const syncSession = async (session: any) => {
       if (!mounted || !session?.user) return;
 
-      // Set up timeout - but don't reject, just log
       const timeoutId = setTimeout(() => {
         if (!profileLoaded) {
           console.warn("Profile fetch taking longer than expected...");
         }
       }, 5000);
 
-      try {
+      // Race profile load against a hard timeout so we never hang forever (e.g. if
+      // the 5s app-level timeout already ran before sign-in).
+      const timeoutPromise = new Promise<'timeout'>((resolve) => {
+        setTimeout(() => resolve('timeout'), SYNC_TIMEOUT_MS);
+      });
+      const sessionPromise = (async (): Promise<'session'> => {
         await handleUserSession(session.user);
-        profileLoaded = true;
+        return 'session';
+      })();
+
+      try {
+        const result = await Promise.race([sessionPromise, timeoutPromise]);
+        profileLoaded = result === 'session';
+        if (mounted && !profileLoaded) {
+          const fallback = {
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.email?.split('@')[0] || 'User',
+            role: 'pod_member' as const,
+            podId: undefined,
+            brandId: undefined
+          };
+          setCurrentUser(fallback);
+        }
       } catch (e: any) {
         console.error("Session sync error:", e?.message);
-        // Only set fallback if profile wasn't loaded
         if (mounted && !profileLoaded) {
           const fallback = {
             id: session.user.id,
