@@ -44,7 +44,10 @@ export async function verifyBrandAccess(shareToken: string): Promise<{ ok: boole
   try {
     const res = await fetch(`${base}/client-verify`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getAnonKey()}`
+      },
       body: JSON.stringify({ shareToken: token }),
     });
     const data = await res.json().catch(() => ({}));
