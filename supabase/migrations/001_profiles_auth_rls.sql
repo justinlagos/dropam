@@ -34,23 +34,50 @@ create policy "Pod leads read pod members" on public.profiles for select using (
 create policy "Users update own profile" on public.profiles for update using (auth.uid() = id);
 create policy "Insert own profile" on public.profiles for insert with check (auth.uid() = id);
 
--- 7. Pods RLS
+-- 7. Pods RLS (Bootstrap-friendly: any authenticated user can create first pod)
 create policy "Authenticated read pods" on public.pods for select using (auth.role() = 'authenticated');
-create policy "Admin manage pods" on public.pods for all using (
+create policy "Bootstrap or admin insert pods" on public.pods for insert with check (
+  auth.role() = 'authenticated' and (
+    (select count(*) from public.pods) = 0 or
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  )
+);
+create policy "Admin update pods" on public.pods for update using (
+  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+);
+create policy "Admin delete pods" on public.pods for delete using (
   exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
 );
 
--- 8. Brands RLS
+-- 8. Brands RLS (Bootstrap-friendly: any authenticated user can create first brands)
 create policy "Authenticated read brands" on public.brands for select using (auth.role() = 'authenticated');
-create policy "Admin manage brands" on public.brands for all using (
+create policy "Bootstrap or admin insert brands" on public.brands for insert with check (
+  auth.role() = 'authenticated' and (
+    (select count(*) from public.brands) = 0 or
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  )
+);
+create policy "Admin update brands" on public.brands for update using (
+  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+);
+create policy "Admin delete brands" on public.brands for delete using (
   exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
 );
 
--- 9. Folders RLS
+-- 9. Folders RLS (Bootstrap-friendly)
 create policy "Read folders in pod or admin" on public.folders for select using (
   exists (select 1 from public.profiles p where p.id = auth.uid() and (p.pod_id = folders.pod_id or p.role = 'admin'))
 );
-create policy "Manage folders in pod or admin" on public.folders for all using (
+create policy "Bootstrap or pod insert folders" on public.folders for insert with check (
+  auth.role() = 'authenticated' and (
+    (select count(*) from public.folders) = 0 or
+    exists (select 1 from public.profiles p where p.id = auth.uid() and (p.pod_id = folders.pod_id or p.role = 'admin'))
+  )
+);
+create policy "Update folders in pod or admin" on public.folders for update using (
+  exists (select 1 from public.profiles p where p.id = auth.uid() and (p.pod_id = folders.pod_id or p.role = 'admin'))
+);
+create policy "Delete folders in pod or admin" on public.folders for delete using (
   exists (select 1 from public.profiles p where p.id = auth.uid() and (p.pod_id = folders.pod_id or p.role = 'admin'))
 );
 
