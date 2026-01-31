@@ -142,11 +142,13 @@ export const AdminCanvasPage: React.FC = () => {
             })}
             {filteredBriefs.map((brief) => {
               const brand = brands.find((b) => b.id === brief.brandId);
+              const pod = pods.find((p) => p.id === brief.podId);
               return (
                 <BriefIcon
                   key={brief.id}
                   brief={brief}
                   brandName={brand?.name}
+                  podName={pod?.name}
                   showMeta
                   selected={selectedIds.has(brief.id)}
                   onClick={(e) => {

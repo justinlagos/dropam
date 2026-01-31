@@ -7,6 +7,7 @@ import { Brief, COLORS } from '../types';
 interface BriefIconProps {
   brief: Brief;
   brandName?: string;
+  podName?: string; // For admin view - shows which POD the brief belongs to
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick?: (e: React.MouseEvent) => void;
   showMeta?: boolean;
@@ -21,9 +22,10 @@ interface BriefIconProps {
 
 export const BRIEF_DROP_TYPE = 'application/x-dropam-brief-id';
 
-export const BriefIcon: React.FC<BriefIconProps> = ({ 
-  brief, 
-  brandName, 
+export const BriefIcon: React.FC<BriefIconProps> = ({
+  brief,
+  brandName,
+  podName,
   onClick,
   onDoubleClick,
   showMeta = false,
@@ -113,10 +115,17 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
                 <div className={`text-[11px] font-semibold leading-tight line-clamp-2 break-words max-w-full ${selected ? 'text-[#111111]' : 'text-[#111111]'}`}>
                 {brief.title}
                 </div>
-                
+
                 <span className="text-[9px] text-gray-400 mt-1.5 font-medium">
                     {showMeta && brief.ownerName ? brief.ownerName : formattedTime}
                 </span>
+
+                {/* POD tag for admin view */}
+                {podName && (
+                  <span className="mt-1 px-1.5 py-0.5 text-[7px] uppercase tracking-wider font-bold text-gray-400 bg-gray-100 rounded">
+                    {podName}
+                  </span>
+                )}
             </div>
         </motion.div>
 
