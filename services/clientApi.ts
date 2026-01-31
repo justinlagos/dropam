@@ -158,19 +158,114 @@ export async function createClientBrief(
   file: File,
   title?: string
 ): Promise<{ brief?: ClientBrief; error?: string }> {
-  const base = getBaseUrl();
-  const form = new FormData();
-  form.set('shareToken', String(shareToken || '').trim());
-  form.set('title', title ?? file.name);
-  form.set('file', file);
-  const res = await fetch(`${base}/client-briefs`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${getAnonKey()}` },
-    body: form,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { error: (data as any).error ?? 'Failed to create brief' };
-  return { brief: data as ClientBrief };
+  const token = String(shareToken || '').trim();
+  if (!token) return { error: 'Invalid token' };
+
+  try {
+    const supabaseUrl = getSupabaseUrl();
+    const headers = {
+      'apikey': getAnonKey(),
+      'Authorization': `Bearer ${getAnonKey()}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    };
+
+    // 1. Verify brand
+    const brandRes = await fetch(
+      `${supabaseUrl}/rest/v1/brands?share_token=eq.${encodeURIComponent(token)}&is_active=eq.true&archived_at=is.null&select=id,slug,pod_id`,
+      { headers: { 'apikey': getAnonKey(), 'Authorization': `Bearer ${getAnonKey()}` } }
+    );
+    const brands = await brandRes.json();
+    if (!brands || brands.length === 0) {
+      return { error: 'Invalid link' };
+    }
+    const brand = brands[0];
+
+    // 2. Create brief record
+    const briefTitle = title ?? file.name;
+    const briefRes = await fetch(`${supabaseUrl}/rest/v1/briefs`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        brand_id: brand.id,
+        pod_id: brand.pod_id,
+        title: briefTitle,
+        status: 'new',
+        priority: 'normal',
+        submitted_at: new Date().toISOString()
+      })
+    });
+
+    if (!briefRes.ok) {
+      const err = await briefRes.text();
+      console.error('Failed to create brief:', err);
+      return { error: 'Failed to create brief' };
+    }
+
+    const briefData = await briefRes.json();
+    const brief = Array.isArray(briefData) ? briefData[0] : briefData;
+
+    // 3. Upload file to storage
+    const fileExt = file.name.split('.').pop() || 'bin';
+    const fileName = `${brief.id}/${Date.now()}.${fileExt}`;
+
+    const uploadRes = await fetch(
+      `${supabaseUrl}/storage/v1/object/briefs/${fileName}`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': getAnonKey(),
+          'Authorization': `Bearer ${getAnonKey()}`,
+          'Content-Type': file.type || 'application/octet-stream'
+        },
+        body: file
+      }
+    );
+
+    let fileUrl = '';
+    if (uploadRes.ok) {
+      fileUrl = `${supabaseUrl}/storage/v1/object/public/briefs/${fileName}`;
+
+      // 4. Create brief_file record
+      await fetch(`${supabaseUrl}/rest/v1/brief_files`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          brief_id: brief.id,
+          name: file.name,
+          type: 'brief',
+          url: fileUrl,
+          visible_to_client: true,
+          uploaded_at: new Date().toISOString()
+        })
+      });
+    } else {
+      console.warn('File upload failed, brief created without file');
+    }
+
+    return {
+      brief: {
+        id: brief.id,
+        brandId: brief.brand_id,
+        podId: brief.pod_id,
+        title: brief.title,
+        status: brief.status,
+        submittedAt: brief.submitted_at,
+        files: fileUrl ? [{
+          id: 'temp',
+          name: file.name,
+          type: 'brief',
+          url: fileUrl,
+          visibleToClient: true,
+          uploadedAt: new Date().toISOString()
+        }] : [],
+        messages: []
+      }
+    };
+  } catch (err: any) {
+    console.error('Create brief error:', err);
+    return { error: 'Failed to create brief' };
+  }
 }
 
 export async function sendClientMessage(
@@ -178,17 +273,56 @@ export async function sendClientMessage(
   briefId: string,
   message: string
 ): Promise<{ id?: string; error?: string }> {
-  const base = getBaseUrl();
-  const res = await fetch(`${base}/client-messages`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAnonKey()}` },
-    body: JSON.stringify({
-      shareToken: String(shareToken || '').trim(),
-      briefId,
-      message,
-    }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { error: (data as any).error ?? 'Failed to send message' };
-  return { id: (data as any).id };
+  const token = String(shareToken || '').trim();
+  if (!token || !briefId || !message) {
+    return { error: 'Missing required fields' };
+  }
+
+  try {
+    const supabaseUrl = getSupabaseUrl();
+    const headers = {
+      'apikey': getAnonKey(),
+      'Authorization': `Bearer ${getAnonKey()}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    };
+
+    // Verify brand first
+    const brandRes = await fetch(
+      `${supabaseUrl}/rest/v1/brands?share_token=eq.${encodeURIComponent(token)}&is_active=eq.true&archived_at=is.null&select=id`,
+      { headers: { 'apikey': getAnonKey(), 'Authorization': `Bearer ${getAnonKey()}` } }
+    );
+    const brands = await brandRes.json();
+    if (!brands || brands.length === 0) {
+      return { error: 'Invalid link' };
+    }
+
+    // Create message
+    const msgRes = await fetch(`${supabaseUrl}/rest/v1/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        brief_id: briefId,
+        text: message,
+        author_name: 'Client',
+        author_type: 'client',
+        visibility: 'client',
+        created_at: new Date().toISOString()
+      })
+    });
+
+    if (!msgRes.ok) {
+      const err = await msgRes.text();
+      console.error('Failed to send message:', err);
+      return { error: 'Failed to send message' };
+    }
+
+    const msgData = await msgRes.json();
+    const msg = Array.isArray(msgData) ? msgData[0] : msgData;
+
+    return { id: msg.id };
+  } catch (err: any) {
+    console.error('Send message error:', err);
+    return { error: 'Failed to send message' };
+  }
 }
