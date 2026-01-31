@@ -15,7 +15,11 @@ interface BriefIconProps {
   onDragEnd?: (e: any, info: any) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   style?: React.CSSProperties;
+  /** When true, brief is draggable for moving into folders (client canvas). Sets drag data as brief id. */
+  draggableForFolder?: boolean;
 }
+
+export const BRIEF_DROP_TYPE = 'application/x-dropam-brief-id';
 
 export const BriefIcon: React.FC<BriefIconProps> = ({ 
   brief, 
@@ -28,7 +32,13 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
   onDragEnd,
   onContextMenu,
   style,
+  draggableForFolder = false,
 }) => {
+  const handleDragStart = (e: React.DragEvent) => {
+    if (!draggableForFolder) return;
+    e.dataTransfer.setData(BRIEF_DROP_TYPE, brief.id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
   const [isHovered, setIsHovered] = useState(false);
   const [showQuickLook, setShowQuickLook] = useState(false);
 
@@ -60,10 +70,12 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
   return (
     <>
         <motion.div 
-            drag={onDragEnd ? true : false}
+            drag={onDragEnd && !draggableForFolder ? true : false}
             dragMomentum={false}
             dragElastic={0}
             onDragEnd={onDragEnd}
+            draggable={draggableForFolder}
+            onDragStart={handleDragStart}
             onClick={onClick}
             onDoubleClick={onDoubleClick}
             onContextMenu={onContextMenu}
@@ -71,9 +83,9 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
             onMouseLeave={() => setIsHovered(false)}
             style={style}
             whileHover={{ scale: 1.02 }}
-            whileDrag={{ scale: 1.02, zIndex: 100, cursor: 'grabbing' }}
+            whileDrag={draggableForFolder ? undefined : { scale: 1.02, zIndex: 100, cursor: 'grabbing' }}
             animate={isTarget ? { scale: 1.2 } : { scale: 1 }}
-            className={`draggable-item w-[120px] h-[140px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-2xl transition-all duration-150 ease-out
+            className={`${onDragEnd && !draggableForFolder ? 'draggable-item' : ''} w-[120px] h-[140px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-2xl transition-all duration-150 ease-out
                  ${selected ? 'bg-gray-100/80 ring-1 ring-gray-200' : 'hover:bg-gray-50/80'}
             `}
         >

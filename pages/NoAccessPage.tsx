@@ -6,27 +6,19 @@ import { ArrowRight, LayoutGrid, Droplets, Database, Loader2 } from 'lucide-reac
 import { supabase } from '../services/supabaseClient';
 
 export const NoAccessPage: React.FC = () => {
-  const { currentUser } = useUser();
+  const { currentUser, refetchUser } = useUser();
   const { pods, brands, loading } = useData();
   const [seeding, setSeeding] = useState(false);
 
   const handleInitialize = async () => {
     setSeeding(true);
     try {
-        // 0. Promote current user to admin for system setup
-        if (currentUser?.id) {
-            await supabase
-                .from('profiles')
-                .update({ role: 'admin' })
-                .eq('id', currentUser.id);
-        }
-
-        // 1. Create Pod with current user as lead
+        // 1. Create Pod first (bootstrap allows any authenticated user when pod count = 0)
         const { data: pod, error: podError } = await supabase
             .from('pods')
             .insert({
-                name: 'Tier 1',
-                slug: 'tier-1',
+                name: 'POD 1',
+                slug: 'pod-1',
                 lead_name: currentUser?.name || 'Lead',
                 lead_id: currentUser?.id
             })
@@ -45,12 +37,16 @@ export const NoAccessPage: React.FC = () => {
              throw podError;
         }
 
-        // 2. Assign current user to this pod as admin
+        // 2. Promote current user to admin and assign to this pod (Users can update own profile)
         if (currentUser?.id) {
-            await supabase
+            const { error: profileError } = await supabase
                 .from('profiles')
                 .update({ pod_id: pod.id, role: 'admin' })
                 .eq('id', currentUser.id);
+            if (profileError && (profileError.code === '42501' || profileError.message?.includes('policy') || profileError.message?.includes('permission'))) {
+                alert("Permission denied updating profile.\n\nEnsure RLS allows 'Users update own profile'. See: supabase/migrations/001_profiles_auth_rls.sql");
+                return;
+            }
         }
 
         // 3. Create sample Brands
@@ -74,6 +70,7 @@ export const NoAccessPage: React.FC = () => {
              position_y: 550
         });
 
+        await refetchUser();
         window.location.reload();
 
     } catch (err: any) {

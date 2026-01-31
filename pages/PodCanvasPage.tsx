@@ -88,7 +88,11 @@ export const PodCanvasPage: React.FC = () => {
         <div className="flex-1 min-w-0 relative">
           <SpatialCanvas
             onLassoSelect={handleLassoSelect}
-            onCanvasClick={() => setSelectedIds(new Set())}
+            onCanvasClick={() => {
+              // Clicking empty canvas clears selection AND closes panel
+              setSelectedIds(new Set());
+              setSelectedBrief(null);
+            }}
             onCanvasContextMenu={(e) => openContextMenu(e, 'canvas')}
           >
             {podFolders.map(folder => {
@@ -115,7 +119,18 @@ export const PodCanvasPage: React.FC = () => {
                   brandName={brand?.name}
                   showMeta
                   selected={selectedIds.has(brief.id)}
-                  onClick={(e) => { e.stopPropagation(); setSelectedBrief(brief); setPanelState({ activeTab: 'details' }); setSelectedIds(prev => new Set(prev).add(brief.id)); }}
+                  onClick={(e) => {
+                    // Single click: select only (highlight)
+                    e.stopPropagation();
+                    setSelectedIds(new Set([brief.id]));
+                  }}
+                  onDoubleClick={(e) => {
+                    // Double click: open side panel
+                    e.stopPropagation();
+                    setSelectedBrief(brief);
+                    setPanelState({ activeTab: 'details' });
+                    setSelectedIds(new Set([brief.id]));
+                  }}
                   onContextMenu={(e) => openContextMenu(e, 'brief', brief.id)}
                   onDragEnd={(_, info) => {
                     const pos = brief.position || { x: 0, y: 0 };

@@ -23,7 +23,12 @@ drop policy if exists "Public briefs" on public.briefs;
 drop policy if exists "Public files" on public.brief_files;
 drop policy if exists "Public messages" on public.messages;
 
--- 6. Profiles RLS
+-- 6. Profiles RLS (drop first so migration is re-runnable)
+drop policy if exists "Users read own profile" on public.profiles;
+drop policy if exists "Admins read all profiles" on public.profiles;
+drop policy if exists "Pod leads read pod members" on public.profiles;
+drop policy if exists "Users update own profile" on public.profiles;
+drop policy if exists "Insert own profile" on public.profiles;
 create policy "Users read own profile" on public.profiles for select using (auth.uid() = id);
 create policy "Admins read all profiles" on public.profiles for select using (
   exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
@@ -35,6 +40,10 @@ create policy "Users update own profile" on public.profiles for update using (au
 create policy "Insert own profile" on public.profiles for insert with check (auth.uid() = id);
 
 -- 7. Pods RLS (Bootstrap-friendly: any authenticated user can create first pod)
+drop policy if exists "Authenticated read pods" on public.pods;
+drop policy if exists "Bootstrap or admin insert pods" on public.pods;
+drop policy if exists "Admin update pods" on public.pods;
+drop policy if exists "Admin delete pods" on public.pods;
 create policy "Authenticated read pods" on public.pods for select using (auth.role() = 'authenticated');
 create policy "Bootstrap or admin insert pods" on public.pods for insert with check (
   auth.role() = 'authenticated' and (
@@ -50,6 +59,10 @@ create policy "Admin delete pods" on public.pods for delete using (
 );
 
 -- 8. Brands RLS (Bootstrap-friendly: any authenticated user can create first brands)
+drop policy if exists "Authenticated read brands" on public.brands;
+drop policy if exists "Bootstrap or admin insert brands" on public.brands;
+drop policy if exists "Admin update brands" on public.brands;
+drop policy if exists "Admin delete brands" on public.brands;
 create policy "Authenticated read brands" on public.brands for select using (auth.role() = 'authenticated');
 create policy "Bootstrap or admin insert brands" on public.brands for insert with check (
   auth.role() = 'authenticated' and (
@@ -65,6 +78,10 @@ create policy "Admin delete brands" on public.brands for delete using (
 );
 
 -- 9. Folders RLS (Bootstrap-friendly)
+drop policy if exists "Read folders in pod or admin" on public.folders;
+drop policy if exists "Bootstrap or pod insert folders" on public.folders;
+drop policy if exists "Update folders in pod or admin" on public.folders;
+drop policy if exists "Delete folders in pod or admin" on public.folders;
 create policy "Read folders in pod or admin" on public.folders for select using (
   exists (select 1 from public.profiles p where p.id = auth.uid() and (p.pod_id = folders.pod_id or p.role = 'admin'))
 );
@@ -82,6 +99,11 @@ create policy "Delete folders in pod or admin" on public.folders for delete usin
 );
 
 -- 10. Briefs RLS
+drop policy if exists "Read briefs pod or admin" on public.briefs;
+drop policy if exists "Clients read own brand briefs" on public.briefs;
+drop policy if exists "Update briefs pod or admin" on public.briefs;
+drop policy if exists "Insert briefs" on public.briefs;
+drop policy if exists "Delete briefs pod or admin" on public.briefs;
 create policy "Read briefs pod or admin" on public.briefs for select using (
   exists (select 1 from public.profiles p where p.id = auth.uid() and (p.pod_id = briefs.pod_id or p.role = 'admin'))
 );
@@ -103,6 +125,9 @@ create policy "Delete briefs pod or admin" on public.briefs for delete using (
 );
 
 -- 11. brief_files RLS - Pod/admin see all; clients see deliverables only when brief is delivered
+drop policy if exists "Read brief files" on public.brief_files;
+drop policy if exists "Pod members insert brief files" on public.brief_files;
+drop policy if exists "Pod members update delete brief files" on public.brief_files;
 create policy "Read brief files" on public.brief_files for select using (
   exists (
     select 1 from public.briefs b
@@ -130,6 +155,8 @@ create policy "Pod members update delete brief files" on public.brief_files for 
 );
 
 -- 12. Messages RLS
+drop policy if exists "Read messages" on public.messages;
+drop policy if exists "Insert messages" on public.messages;
 create policy "Read messages" on public.messages for select using (
   exists (
     select 1 from public.briefs b

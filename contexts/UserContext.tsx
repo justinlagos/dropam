@@ -8,6 +8,7 @@ interface UserContextType {
   isLoading: boolean;
   signOut: () => Promise<void>;
   error: string | null;
+  refetchUser: () => Promise<void>;
 }
 
 type PermissionAction = 'reassign_brief' | 'delete_brief' | 'view_internal_notes' | 'set_deadline' | 'take_brief' | 'deliver_brief' | 'manage_users';
@@ -19,16 +20,20 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper to map DB profile to App User
-  const mapProfileToUser = (profile: any, sessionUser: any): User => ({
+  // Helper to map DB profile to App User (Supabase returns snake_case for columns)
+  const mapProfileToUser = (profile: any, sessionUser: any): User => {
+    const dbRole = profile.role ?? (profile as any).role;
+    const role = (dbRole === 'creative' ? 'pod_member' : dbRole) || 'pod_member';
+    return {
       id: profile.id,
       email: profile.email || sessionUser.email || '',
       name: profile.name || sessionUser.email?.split('@')[0] || 'User',
-      role: (profile.role === 'creative' ? 'pod_member' : profile.role) || 'pod_member',
-      podId: profile.pod_id,
-      brandId: profile.brand_id,
+      role: role as User['role'],
+      podId: profile.pod_id ?? (profile as any).pod_id,
+      brandId: profile.brand_id ?? (profile as any).brand_id,
       preferences: profile.preferences
-  });
+    };
+  };
 
   const handleUserSession = async (sessionUser: any) => {
     const fallbackUser = {
@@ -172,6 +177,11 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, []);
 
+  const refetchUser = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) await handleUserSession(session.user);
+  }, []);
+
   const signOut = async () => {
       setIsLoading(true);
       await supabase.auth.signOut();
@@ -203,7 +213,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [currentUser]);
 
   return (
-    <UserContext.Provider value={{ currentUser, checkPermission, isLoading, signOut, error }}>
+    <UserContext.Provider value={{ currentUser, checkPermission, isLoading, signOut, error, refetchUser }}>
       {children}
     </UserContext.Provider>
   );

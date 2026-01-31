@@ -198,7 +198,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
 
              <div className="space-y-2">
                 {brief.files.filter(f => f.type === 'deliverable' && (viewType === 'internal' || f.visibleToClient)).map(file => (
-                    <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:shadow-sm transition-all group">
+                    <a key={file.id} href={file.url} target="_blank" rel="noreferrer" {...(viewType === 'client' ? { download: file.name } : {})} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:shadow-sm transition-all group">
                         <div className="flex items-center gap-3 overflow-hidden">
                             <CheckCircle2 size={16} className="text-green-500 shrink-0" />
                             <span className="text-sm font-medium text-[#111111] truncate">{file.name}</span>
@@ -231,12 +231,20 @@ export const SidePanel: React.FC<SidePanelProps> = ({
                  {visibleMessages.length === 0 && (
                      <div className="text-center text-[10px] uppercase tracking-widest text-gray-300 mt-8 font-bold">No Messages</div>
                  )}
-                 {visibleMessages.map(msg => (
-                     <div key={msg.id} className={`p-3 rounded-2xl text-sm max-w-[85%] shadow-sm ${msg.authorName === 'Client' ? 'bg-white text-[#111111] self-start rounded-tl-sm' : 'bg-blue-500 text-white self-end ml-auto rounded-tr-sm'}`}>
-                         <p className="mb-0.5 leading-relaxed">{msg.text}</p>
-                         <p className="text-[9px] opacity-70 font-bold uppercase tracking-widest">{msg.authorName}</p>
-                     </div>
-                 ))}
+                 {visibleMessages.map(msg => {
+                     const date = msg.createdAt ? new Date(msg.createdAt) : null;
+                     const timeStr = date ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                     const dateStr = date ? date.toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+                     return (
+                         <div key={msg.id} className={`p-3 rounded-2xl text-sm max-w-[85%] shadow-sm ${msg.authorName === 'Client' || msg.authorType === 'client' ? 'bg-white text-[#111111] self-start rounded-tl-sm' : 'bg-blue-500 text-white self-end ml-auto rounded-tr-sm'}`}>
+                             <p className="mb-1.5 leading-relaxed">{msg.text}</p>
+                             <div className="flex items-center gap-2 text-[9px] opacity-70">
+                                 <span className="font-bold uppercase tracking-widest">{msg.authorName || (msg.authorType === 'client' ? 'Client' : 'Unknown')}</span>
+                                 {date && <span className="opacity-80">{dateStr} {timeStr}</span>}
+                             </div>
+                         </div>
+                     );
+                 })}
              </div>
              
              <div className="relative p-2">
