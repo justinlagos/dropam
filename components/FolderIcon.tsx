@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Folder as FolderIconSvg } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Folder, COLORS } from '../types';
-import { BRIEF_DROP_TYPE } from './BriefIcon';
+import { BRIEF_DROP_TYPE, ICON_CAPSULE_CLASS } from './BriefIcon';
 import { useCanvasTransform } from './SpatialCanvas';
 import { useDesktopDrag } from './hooks/useDesktopDrag';
 
@@ -82,15 +82,14 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
-      whileHover={{ scale: 1.02 }}
       animate={isTarget || isDropTarget ? { scale: 1.1 } : isDragging ? { zIndex: 100 } : { scale: 1 }}
-      className={`draggable-item absolute w-[120px] h-[120px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-xl transition-colors duration-150 ease-out
+      className={`draggable-item absolute w-[120px] h-[140px] flex flex-col items-center justify-start pt-2 pb-4 cursor-pointer select-none rounded-2xl transition-colors duration-150 ease-out
          ${selected ? 'bg-gray-100/80 ring-1 ring-gray-200' : 'hover:bg-gray-50/80'}
          ${isDragging ? 'cursor-grabbing' : ''}
          ${isDropTarget ? 'bg-blue-50 ring-2 ring-blue-400' : ''}
       `}
     >
-      <div className={`relative w-16 h-14 flex items-center justify-center mb-1 rounded-xl transition-all duration-150 ease-out pointer-events-none
+      <div className={`relative mb-4 flex items-center justify-center ${ICON_CAPSULE_CLASS} transition-all duration-150 ease-out pointer-events-none
         ${selected ? 'ring-1 ring-gray-300' : ''}
         ${isTarget ? 'ring-4 ring-blue-300 bg-blue-50' : ''}
       `}>
@@ -106,7 +105,7 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
           </div>
         )}
       </div>
-      <span className="text-[12px] font-medium text-center w-full truncate px-2 rounded transition-colors pointer-events-none text-[#111111]">
+      <span className="text-[12px] font-medium text-center w-full truncate px-2 rounded transition-colors pointer-events-none text-[#111111] mt-0.5">
         {folder.name}
       </span>
     </motion.div>

@@ -111,7 +111,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             }
          `}>
             {fullscreen ? (
-               // Toast Style for Fullscreen
+               // Fullscreen progress
                <div className="w-full">
                   <div className="flex justify-between items-center mb-2">
                      <span className="text-sm font-medium truncate max-w-[150px]">{fileName || 'Uploading...'}</span>

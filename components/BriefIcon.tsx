@@ -27,6 +27,10 @@ interface BriefIconProps {
 
 export const BRIEF_DROP_TYPE = 'application/x-dropam-brief-id';
 
+/** Shared icon capsule: square, soft rounding, subtle border, minimal constant shadow. Used by BriefIcon, FolderIcon, ClientFolderIcon. */
+export const ICON_CAPSULE_CLASS =
+  'w-[68px] h-[68px] rounded-2xl bg-white border border-black/5 shadow-sm';
+
 export const BriefIcon: React.FC<BriefIconProps> = ({
   brief,
   brandName,
@@ -145,9 +149,8 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
     onContextMenu,
     onMouseEnter: () => setIsHovered(true),
     onMouseLeave: () => setIsHovered(false),
-    whileHover: { scale: 1.02 } as const,
     animate: (isTarget ? { scale: 1.2 } : isDragging ? { zIndex: 100 } : { scale: 1 }) as const,
-    className: `${canDragCanvas || canDragMotion ? 'draggable-item' : ''} w-[120px] h-[140px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-2xl transition-colors duration-150 ease-out
+    className: `${canDragCanvas || canDragMotion ? 'draggable-item' : ''} w-[120px] h-[140px] flex flex-col items-center justify-start pt-2 pb-4 cursor-pointer select-none rounded-2xl transition-colors duration-150 ease-out
              ${selected ? 'bg-gray-100/80 ring-1 ring-gray-200' : 'hover:bg-gray-50/80'}
              ${isDragging ? 'cursor-grabbing' : ''}`,
   };
@@ -165,9 +168,9 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
           onPointerUp={canvasDrag.handlers.onPointerUp}
           onPointerLeave={canvasDrag.handlers.onPointerUp}
         >
-        <div className={`relative w-[68px] h-[68px] mb-4 flex items-center justify-center bg-white rounded-2xl transition-all duration-150 ease-out
-            ${selected ? 'ring-1 ring-gray-300 shadow-sm' : 'shadow-sm border border-black/5'}
-            ${isTarget ? 'ring-4 ring-green-400 shadow-2xl bg-green-50' : ''}
+        <div className={`relative mb-4 flex items-center justify-center ${ICON_CAPSULE_CLASS} transition-all duration-150 ease-out
+            ${selected ? 'ring-1 ring-gray-300' : ''}
+            ${isTarget ? 'ring-4 ring-green-400 bg-green-50' : ''}
         `}>
           <FileIcon kind={primaryFileKind} size={30} className="text-[#111111]" />
 
@@ -190,7 +193,7 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
             {brief.title}
           </div>
 
-          <span className="text-[9px] text-gray-400 mt-1.5 font-medium">
+          <span className="text-[9px] text-gray-400 mt-2 font-medium">
             {showMeta && brief.ownerName ? brief.ownerName : (tileTimestamp || formattedTime)}
           </span>
           {showMeta && tileTimestamp && brief.ownerName && (
@@ -265,9 +268,9 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
         }}
         {...sharedProps}
       >
-        <div className={`relative w-[68px] h-[68px] mb-4 flex items-center justify-center bg-white rounded-2xl transition-all duration-150 ease-out
-            ${selected ? 'ring-1 ring-gray-300 shadow-sm' : 'shadow-sm border border-black/5'}
-            ${isTarget ? 'ring-4 ring-green-400 shadow-2xl bg-green-50' : ''}
+        <div className={`relative mb-4 flex items-center justify-center ${ICON_CAPSULE_CLASS} transition-all duration-150 ease-out
+            ${selected ? 'ring-1 ring-gray-300' : ''}
+            ${isTarget ? 'ring-4 ring-green-400 bg-green-50' : ''}
         `}>
           <FileIcon kind={primaryFileKind} size={30} className="text-[#111111]" />
           <div
@@ -286,7 +289,7 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
           <div className={`text-[11px] font-semibold leading-tight line-clamp-2 break-words max-w-full ${selected ? 'text-[#111111]' : 'text-[#111111]'}`}>
             {brief.title}
           </div>
-          <span className="text-[9px] text-gray-400 mt-1.5 font-medium">
+          <span className="text-[9px] text-gray-400 mt-2 font-medium">
             {showMeta && brief.ownerName ? brief.ownerName : (tileTimestamp || formattedTime)}
           </span>
           {showMeta && tileTimestamp && brief.ownerName && (

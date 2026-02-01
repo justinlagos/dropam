@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { Folder as FolderIconSvg } from 'lucide-react';
 import { COLORS } from '../types';
-import { BRIEF_DROP_TYPE } from './BriefIcon';
+import { BRIEF_DROP_TYPE, ICON_CAPSULE_CLASS } from './BriefIcon';
 
 interface ClientFolderIconProps {
   folderId: string;
@@ -47,7 +47,7 @@ export const ClientFolderIcon: React.FC<ClientFolderIconProps> = ({
 
   return (
     <div
-      className={`w-[120px] h-[120px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-xl transition-all duration-150 ease-out shrink-0
+      className={`w-[120px] h-[140px] flex flex-col items-center justify-start pt-2 pb-4 cursor-pointer select-none rounded-2xl transition-all duration-150 ease-out shrink-0
         ${selected ? 'bg-gray-100/80 ring-1 ring-gray-200' : 'hover:bg-gray-50/80'}
         ${isDropTarget ? 'ring-2 ring-blue-400 bg-blue-50/80' : ''}
       `}
@@ -58,7 +58,9 @@ export const ClientFolderIcon: React.FC<ClientFolderIconProps> = ({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="relative w-16 h-14 flex items-center justify-center mb-1 rounded-xl pointer-events-none">
+      <div className={`relative mb-4 flex items-center justify-center ${ICON_CAPSULE_CLASS} pointer-events-none transition-all duration-150 ease-out
+        ${selected ? 'ring-1 ring-gray-300' : ''}
+      `}>
         <FolderIconSvg size={56} fill={COLORS.folder} stroke={COLORS.folder} className="drop-shadow-sm" />
         {count > 0 && (
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 mt-2 text-[10px] font-bold text-black/40">
@@ -66,7 +68,7 @@ export const ClientFolderIcon: React.FC<ClientFolderIconProps> = ({
           </div>
         )}
       </div>
-      <span className="text-[12px] font-medium text-center w-full truncate px-2 text-[#111111]">
+      <span className="text-[12px] font-medium text-center w-full truncate px-2 text-[#111111] mt-0.5">
         {name}
       </span>
     </div>
