@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { FileText } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { Brief, COLORS } from '../types';
+import { FileIcon } from './icons/FileIcons';
+import { getFileKind, FileKind } from '../utils/fileType';
 
 interface BriefIconProps {
   brief: Brief;
@@ -82,6 +84,15 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
   const isNew = brief.status === 'new';
   const canDrag = onDragEnd && !draggableForFolder;
 
+  // Determine file kind from primary attachment (first brief/attachment file)
+  const primaryFileKind: FileKind = useMemo(() => {
+    const primaryFile = brief.files?.find(f => f.type === 'brief' || f.type === 'attachment');
+    if (primaryFile) {
+      return getFileKind(primaryFile.name);
+    }
+    return 'doc'; // Default to document icon for briefs without files
+  }, [brief.files]);
+
   const handleDragStartMotion = () => {
     setIsDragging(true);
     dragStartPos.current = { x: x.get(), y: y.get() };
@@ -139,7 +150,7 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
             ${selected ? 'ring-1 ring-gray-300 shadow-sm' : 'shadow-sm border border-black/5'}
             ${isTarget ? 'ring-4 ring-green-400 shadow-2xl bg-green-50' : ''}
         `}>
-          <FileText size={30} className="text-[#111111]" strokeWidth={1.5} />
+          <FileIcon kind={primaryFileKind} size={30} className="text-[#111111]" />
 
           {/* Status Indicator */}
           <div
@@ -190,7 +201,7 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
                 onClick={e => e.stopPropagation()}
               >
                 <div className="h-64 bg-gray-50 flex items-center justify-center border-b border-black/5 relative">
-                  <FileText size={100} className="text-gray-200" strokeWidth={0.5} />
+                  <FileIcon kind={primaryFileKind} size={100} className="text-gray-200" />
                   <div className="absolute top-8 right-8 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest bg-white shadow-sm border border-black/5" style={{ color: getStatusColor() }}>
                     {brief.status.replace('_', ' ')}
                   </div>

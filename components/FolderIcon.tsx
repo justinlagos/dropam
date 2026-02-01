@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Folder as FolderIconSvg } from 'lucide-react';
 import { motion, useMotionValue } from 'framer-motion';
 import { Folder, COLORS } from '../types';
+import { BRIEF_DROP_TYPE } from './BriefIcon';
 
 interface FolderIconProps {
   folder: Folder;
@@ -12,6 +13,7 @@ interface FolderIconProps {
   onDoubleClick?: (e: React.MouseEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDragEnd?: (e: any, info: any) => void;
+  onBriefDrop?: (briefId: string) => void;
   style?: React.CSSProperties;
 }
 
@@ -24,9 +26,11 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
   onDoubleClick,
   onContextMenu,
   onDragEnd,
+  onBriefDrop,
   style
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isDropTarget, setIsDropTarget] = useState(false);
 
   // Use motion values for smooth, snap-free dragging
   const x = useMotionValue(0);
@@ -62,6 +66,30 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
     }
   };
 
+  // HTML5 Drag & Drop handlers for accepting brief drops
+  const handleDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes(BRIEF_DROP_TYPE)) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDropTarget(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDropTarget(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDropTarget(false);
+    const briefId = e.dataTransfer.getData(BRIEF_DROP_TYPE);
+    if (briefId && onBriefDrop) {
+      onBriefDrop(briefId);
+    }
+  };
+
   return (
     <motion.div
       drag
@@ -70,6 +98,9 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
       dragConstraints={{ top: -Infinity, left: -Infinity, right: Infinity, bottom: Infinity }}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       style={{
         ...style,
         x,
@@ -79,10 +110,11 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       whileHover={{ scale: 1.02 }}
-      animate={isTarget ? { scale: 1.1 } : isDragging ? { scale: 1.05, zIndex: 100 } : { scale: 1 }}
+      animate={isTarget || isDropTarget ? { scale: 1.1 } : isDragging ? { scale: 1.05, zIndex: 100 } : { scale: 1 }}
       className={`draggable-item absolute w-[120px] h-[120px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-xl transition-colors duration-150 ease-out
          ${selected ? 'bg-gray-100/80 ring-1 ring-gray-200' : 'hover:bg-gray-50/80'}
          ${isDragging ? 'cursor-grabbing shadow-2xl' : ''}
+         ${isDropTarget ? 'bg-blue-50 ring-2 ring-blue-400' : ''}
       `}
     >
       <div className={`relative w-16 h-14 flex items-center justify-center mb-1 rounded-xl transition-all duration-150 ease-out pointer-events-none

@@ -2,10 +2,12 @@
  * Side panel for a client folder. Shows folder name, briefs inside, rename, delete.
  */
 import React, { useState, useEffect } from 'react';
-import { X, Folder as FolderIconSvg, FileText } from 'lucide-react';
+import { X, Folder as FolderIconSvg } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Brief } from '../types';
 import type { ClientFolder } from '../utils/clientFolders';
+import { FileIcon } from './icons/FileIcons';
+import { getFileKind } from '../utils/fileType';
 
 interface ClientFolderSidePanelProps {
   folder: ClientFolder;
@@ -116,29 +118,33 @@ export const ClientFolderSidePanel: React.FC<ClientFolderSidePanelProps> = ({
             <p className="text-sm text-gray-400 py-4">Drag briefs from the canvas into this folder.</p>
           ) : (
             <div className="space-y-2">
-              {briefsInFolder.map((brief) => (
-                <div
-                  key={brief.id}
-                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors group"
-                >
-                  <FileText size={18} className="text-gray-400 shrink-0" />
-                  <button
-                    type="button"
-                    onClick={() => onOpenBrief(brief)}
-                    className="flex-1 text-sm font-medium text-[#111111] truncate block text-left hover:underline"
+              {briefsInFolder.map((brief) => {
+                const primaryFile = brief.files?.find(f => f.type === 'brief' || f.type === 'attachment');
+                const fileKind = primaryFile ? getFileKind(primaryFile.name) : 'doc';
+                return (
+                  <div
+                    key={brief.id}
+                    className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors group"
                   >
-                    {brief.title}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveBrief(brief.id)}
-                    className="opacity-0 group-hover:opacity-100 text-xs text-gray-500 hover:text-[#111111] px-2 py-1 rounded hover:bg-gray-200 transition-all"
-                    title="Remove from folder"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+                    <FileIcon kind={fileKind} size={18} className="text-gray-400 shrink-0" />
+                    <button
+                      type="button"
+                      onClick={() => onOpenBrief(brief)}
+                      className="flex-1 text-sm font-medium text-[#111111] truncate block text-left hover:underline"
+                    >
+                      {brief.title}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveBrief(brief.id)}
+                      className="opacity-0 group-hover:opacity-100 text-xs text-gray-500 hover:text-[#111111] px-2 py-1 rounded hover:bg-gray-200 transition-all"
+                      title="Remove from folder"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

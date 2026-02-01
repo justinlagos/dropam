@@ -2,7 +2,7 @@
  * Single source of truth for brief actions. Used by SidePanel and context menu.
  * All menu items call the same handlers from ActionContext.
  */
-import type { Brief } from '../types';
+import type { Brief, Folder } from '../types';
 import type { MenuItem } from '../components/ContextMenu';
 
 export type BriefActions = {
@@ -71,7 +71,8 @@ export function getBriefContextMenuItems(
   brief: Brief,
   actions: BriefActions,
   user: UserContext,
-  callbacks: BriefActionCallbacks
+  callbacks: BriefActionCallbacks,
+  folders?: Folder[]
 ): MenuItem[] {
   const { currentUser, checkPermission } = user;
   const canTake = checkPermission('take_brief') && brief.status === 'new';
@@ -81,6 +82,21 @@ export function getBriefContextMenuItems(
   const canDelete = checkPermission('delete_brief');
 
   const hasFiles = brief.files && brief.files.length > 0;
+
+  // Build folder submenu items
+  const folderSubmenu: MenuItem[] = folders && folders.length > 0
+    ? [
+        // Option to remove from folder (move to root)
+        ...(brief.folderId ? [{ label: '📤 Remove from folder', onClick: () => { actions.moveBriefToFolder(brief.id, undefined); callbacks.closeMenu(); } }] : []),
+        // List of folders to move to
+        ...folders
+          .filter(f => f.id !== brief.folderId) // Don't show current folder
+          .map(f => ({
+            label: `📁 ${f.name}`,
+            onClick: () => { actions.moveBriefToFolder(brief.id, f.id); callbacks.closeMenu(); }
+          }))
+      ]
+    : [];
 
   const items: MenuItem[] = [
     { label: 'Open details', onClick: () => { callbacks.openDetails(); callbacks.closeMenu(); } },
@@ -92,6 +108,8 @@ export function getBriefContextMenuItems(
     { label: 'Send message to client', onClick: () => { callbacks.openMessagesClient(); callbacks.closeMenu(); } },
     { label: 'Send message to pod', onClick: () => { callbacks.openMessagesPod(); callbacks.closeMenu(); } },
     { label: 'Upload deliverables', onClick: () => { callbacks.openDelivery(); callbacks.closeMenu(); } },
+    // Move to folder submenu
+    ...(folderSubmenu.length > 0 ? [{ label: 'Move to folder', onClick: () => {}, submenu: folderSubmenu }] : []),
     ...(canSetDeadline ? [{ label: 'Set deadline', onClick: () => { callbacks.openProperties(); callbacks.closeMenu(); } }] : []),
     ...(canReassign ? [{ label: 'Reassign owner', onClick: () => { callbacks.openProperties(); callbacks.closeMenu(); } }] : []),
     { label: 'Properties', onClick: () => { callbacks.openProperties(); callbacks.closeMenu(); } },
