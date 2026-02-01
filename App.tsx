@@ -3,6 +3,8 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { DataProvider, useData } from './contexts/DataContext';
 import { ActionProvider } from './contexts/ActionContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { ClientDropPage } from './pages/ClientDropPage';
 import { PodCanvasPage } from './pages/PodCanvasPage';
 import { AdminCanvasPage } from './pages/AdminCanvasPage';
@@ -29,18 +31,22 @@ const LoadingScreen = () => (
 );
 
 const ProtectedRoute: React.FC<{ children: React.JSX.Element }> = ({ children }) => {
-  const { currentUser, isLoading } = useUser();
-  if (isLoading) return <LoadingScreen />;
+  const { currentUser, isLoading, initialized } = useUser();
+
+  // Wait for auth to fully initialize before making any decisions
+  if (!initialized || isLoading) return <LoadingScreen />;
+
   if (!currentUser) return <Navigate to="/login" replace />;
   return children;
 };
 
 const RootRedirect: React.FC = () => {
-    const { currentUser, isLoading } = useUser();
+    const { currentUser, isLoading, initialized } = useUser();
     const { pods, loading: dataLoading } = useData();
     const activePods = pods.filter((p: { archivedAt?: string }) => !p.archivedAt);
 
-    if (isLoading || dataLoading) return <LoadingScreen />;
+    // Wait for auth to fully initialize
+    if (!initialized || isLoading || dataLoading) return <LoadingScreen />;
     if (!currentUser) return <Navigate to="/login" replace />;
 
     // Admin always lands on the All PODS dashboard (all briefs on one canvas)
@@ -69,40 +75,44 @@ const RootRedirect: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <UserProvider>
-      <DataProvider>
-        <ActionProvider>
-          <HashRouter>
-            <CommandPalette />
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-              <Route path="/logout" element={<LogoutRedirect />} />
-              
-              <Route path="/drop/:shareToken" element={<ClientDropPage />} />
-              
-              <Route path="/no-access" element={
-                  <ProtectedRoute><NoAccessPage /></ProtectedRoute>
-              } />
-              
-              <Route path="/pod/:podSlug" element={
-                  <ProtectedRoute><PodCanvasPage /></ProtectedRoute>
-              } />
-              <Route path="/admin" element={
-                  <ProtectedRoute><AdminCanvasPage /></ProtectedRoute>
-              } />
-              
-              <Route path="/settings" element={
-                  <ProtectedRoute><SettingsPage /></ProtectedRoute>
-              } />
-              
-              <Route path="/" element={<RootRedirect />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </HashRouter>
-        </ActionProvider>
-      </DataProvider>
-    </UserProvider>
+    <ErrorBoundary>
+      <UserProvider>
+        <ToastProvider>
+          <DataProvider>
+            <ActionProvider>
+              <HashRouter>
+                <CommandPalette />
+                <Routes>
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/signup" element={<SignupPage />} />
+                  <Route path="/logout" element={<LogoutRedirect />} />
+
+                  <Route path="/drop/:shareToken" element={<ClientDropPage />} />
+
+                  <Route path="/no-access" element={
+                    <ProtectedRoute><NoAccessPage /></ProtectedRoute>
+                  } />
+
+                  <Route path="/pod/:podSlug" element={
+                    <ProtectedRoute><PodCanvasPage /></ProtectedRoute>
+                  } />
+                  <Route path="/admin" element={
+                    <ProtectedRoute><AdminCanvasPage /></ProtectedRoute>
+                  } />
+
+                  <Route path="/settings" element={
+                    <ProtectedRoute><SettingsPage /></ProtectedRoute>
+                  } />
+
+                  <Route path="/" element={<RootRedirect />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </HashRouter>
+            </ActionProvider>
+          </DataProvider>
+        </ToastProvider>
+      </UserProvider>
+    </ErrorBoundary>
   );
 };
 

@@ -37,6 +37,21 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
+
+      /* Toast animations */
+      @keyframes slide-in {
+        from {
+          opacity: 0;
+          transform: translateX(100%);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+      .animate-slide-in {
+        animation: slide-in 0.3s ease-out;
+      }
     </style>
   <script type="importmap">
 {
@@ -56,7 +71,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>

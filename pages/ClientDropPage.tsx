@@ -15,7 +15,7 @@ import {
 import { Brief, Brand } from '../types';
 import { getClientFolders, setClientFolders, generateFolderId, type ClientFolder } from '../utils/clientFolders';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Loader2, CheckCircle2 } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { ContextMenu } from '../components/ContextMenu';
 
 /** Get all files from a dropped directory (Chrome/Edge). */
@@ -82,6 +82,8 @@ export const ClientDropPage: React.FC = () => {
   const [selectedFolder, setSelectedFolder] = useState<ClientFolder | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'brief' | 'folder'; brief?: Brief; folder?: ClientFolder } | null>(null);
 
   const brandName = brandSlug ? brandSlug.charAt(0).toUpperCase() + brandSlug.slice(1) : '';
@@ -189,26 +191,55 @@ export const ClientDropPage: React.FC = () => {
   );
 
   const handleUpload = useCallback(
-    (files: File[]) => {
+    async (files: File[]) => {
       if (!files.length || !shareToken || !verified) return;
+
       const file = files[0];
+      setUploadError(null);
+      setIsUploading(true);
       setUploadProgress(0);
+
+      // Simulate progress while upload happens
       let progress = 0;
       const interval = setInterval(() => {
-        progress += 5;
-        setUploadProgress(progress);
-        if (progress >= 100) {
-          clearInterval(interval);
-          createClientBrief(shareToken, file).then(({ brief }) => {
-            setUploadProgress(null);
-            if (brief) {
-              setBriefs((prev) => [brief, ...prev]);
-              setShowSuccess(true);
-              setTimeout(() => setShowSuccess(false), 4000);
-            }
-          });
+        progress += 3;
+        if (progress < 90) {
+          setUploadProgress(progress);
         }
-      }, 20);
+      }, 50);
+
+      try {
+        const { brief, error } = await createClientBrief(shareToken, file);
+
+        clearInterval(interval);
+        setUploadProgress(100);
+
+        // Brief delay to show 100%
+        await new Promise(r => setTimeout(r, 200));
+        setUploadProgress(null);
+        setIsUploading(false);
+
+        if (error) {
+          setUploadError(error);
+          setTimeout(() => setUploadError(null), 6000);
+          return;
+        }
+
+        if (brief) {
+          setBriefs((prev) => [brief, ...prev]);
+          setShowSuccess(true);
+          setTimeout(() => setShowSuccess(false), 4000);
+        } else {
+          setUploadError('Upload failed. Please try again.');
+          setTimeout(() => setUploadError(null), 6000);
+        }
+      } catch (err: any) {
+        clearInterval(interval);
+        setUploadProgress(null);
+        setIsUploading(false);
+        setUploadError(err.message || 'Upload failed. Please check your connection and try again.');
+        setTimeout(() => setUploadError(null), 6000);
+      }
     },
     [shareToken, verified]
   );
@@ -221,29 +252,58 @@ export const ClientDropPage: React.FC = () => {
       if (entry?.isDirectory) {
         try {
           const dirFiles = await getFilesFromDirectoryEntry(entry as FileSystemDirectoryEntry);
-          if (!dirFiles.length) return;
+          if (!dirFiles.length) {
+            setUploadError('The folder appears to be empty.');
+            setTimeout(() => setUploadError(null), 6000);
+            return;
+          }
           const folderName = entry.name || 'New folder';
           const newFolder: ClientFolder = { id: generateFolderId(), name: folderName, briefIds: [] };
           setFolders((prev) => [...prev, newFolder]);
+          setIsUploading(true);
           setUploadProgress(0);
+          setUploadError(null);
+
           const total = dirFiles.length;
           let done = 0;
+          let failedCount = 0;
+
           for (const file of dirFiles) {
             const brief = await uploadSingleFile(file);
             if (brief) {
               setFolders((prev) =>
                 prev.map((f) => (f.id === newFolder.id ? { ...f, briefIds: [...f.briefIds, brief.id] } : f))
               );
+            } else {
+              failedCount++;
             }
             done += 1;
             setUploadProgress(Math.round((done / total) * 100));
           }
+
           setUploadProgress(null);
-          setShowSuccess(true);
-          setTimeout(() => setShowSuccess(false), 4000);
-        } catch {
+          setIsUploading(false);
+
+          if (failedCount === total) {
+            setUploadError('All uploads failed. Please try again.');
+            setTimeout(() => setUploadError(null), 6000);
+          } else if (failedCount > 0) {
+            setShowSuccess(true);
+            setTimeout(() => setShowSuccess(false), 4000);
+            // Show partial success warning
+            setTimeout(() => {
+              setUploadError(`${failedCount} of ${total} files failed to upload.`);
+              setTimeout(() => setUploadError(null), 6000);
+            }, 4000);
+          } else {
+            setShowSuccess(true);
+            setTimeout(() => setShowSuccess(false), 4000);
+          }
+        } catch (err: any) {
           setUploadProgress(null);
-          handleUpload(files);
+          setIsUploading(false);
+          setUploadError(err.message || 'Failed to process folder. Please try again.');
+          setTimeout(() => setUploadError(null), 6000);
         }
       } else {
         handleUpload(files);
@@ -381,6 +441,46 @@ export const ClientDropPage: React.FC = () => {
                 <CheckCircle2 size={12} className="text-white" />
               </div>
               <span>Brief received! Our team is on it.</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {uploadError && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-12 left-1/2 transform -translate-x-1/2 z-50"
+          >
+            <div className="bg-red-600 text-white px-8 py-4 rounded-2xl text-sm font-medium shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center gap-3">
+              <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                <XCircle size={14} className="text-white" />
+              </div>
+              <span>{uploadError}</span>
+              <button
+                onClick={() => setUploadError(null)}
+                className="ml-2 text-white/70 hover:text-white transition-colors"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isUploading && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-12 left-1/2 transform -translate-x-1/2 z-50"
+          >
+            <div className="bg-[#111111] text-white px-8 py-4 rounded-2xl text-sm font-medium shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center gap-3">
+              <Loader2 size={16} className="animate-spin" />
+              <span>Uploading... {uploadProgress}%</span>
             </div>
           </motion.div>
         )}

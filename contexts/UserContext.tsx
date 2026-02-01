@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { User, Membership, MembershipRole } from '../types';
 import { supabase } from '../services/supabaseClient';
 
@@ -8,6 +8,7 @@ interface UserContextType {
   hasPodAccess: (podId: string) => boolean;
   getPodRole: (podId: string) => MembershipRole | null;
   isLoading: boolean;
+  initialized: boolean;
   signOut: () => Promise<void>;
   error: string | null;
   refetchUser: () => Promise<void>;
@@ -20,18 +21,21 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Guards against race conditions
+  const mountedRef = useRef(true);
+  const sessionSyncInProgress = useRef(false);
+  const lastSyncedUserId = useRef<string | null>(null);
 
   // Helper to map DB profile + memberships to App User
   const mapProfileToUser = (profile: any, memberships: any[], sessionUser: any): User => {
-    // Role is now simplified: 'admin' or 'user'
-    // Legacy roles (pod_member, pod_lead) are mapped to 'user' - pod access comes from memberships
     let role: User['role'] = 'user';
     if (profile.role === 'admin') {
       role = 'admin';
     }
 
-    // Map memberships from DB format
     const mappedMemberships: Membership[] = (memberships || []).map((m: any) => ({
       id: m.id,
       userId: m.user_id,
@@ -47,22 +51,24 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       email: profile.email || sessionUser.email || '',
       name: profile.name || sessionUser.email?.split('@')[0] || 'User',
       role,
-      // Legacy podId - first active membership's pod (for backward compatibility)
       podId: mappedMemberships.find(m => m.status === 'active')?.podId,
       memberships: mappedMemberships,
       preferences: profile.preferences
     };
   };
 
-  const handleUserSession = async (sessionUser: any) => {
-    const fallbackUser: User = {
-      id: sessionUser.id,
-      email: sessionUser.email || '',
-      name: sessionUser.email?.split('@')[0] || 'User',
-      role: 'user',
-      podId: undefined,
-      memberships: [],
-    };
+  const createFallbackUser = (sessionUser: any): User => ({
+    id: sessionUser.id,
+    email: sessionUser.email || '',
+    name: sessionUser.email?.split('@')[0] || 'User',
+    role: 'user',
+    podId: undefined,
+    memberships: []
+  });
+
+  const handleUserSession = useCallback(async (sessionUser: any): Promise<User> => {
+    const fallbackUser = createFallbackUser(sessionUser);
+
     try {
       setError(null);
 
@@ -73,34 +79,27 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .eq('id', sessionUser.id)
         .single();
 
-      // Handle specific database errors gracefully (no alert popups)
       if (fetchError) {
         if (fetchError.code === '42P01') {
-          // Tables missing
           setError('Database tables not found. Contact admin.');
-          setCurrentUser(fallbackUser);
-          return;
+          return fallbackUser;
         }
         if (fetchError.code === '42501' || fetchError.message?.includes('permission') || fetchError.message?.includes('policy')) {
-          // Permission denied - RLS issue
           setError('Permission denied. Database policies may need to be applied.');
-          setCurrentUser(fallbackUser);
-          return;
+          return fallbackUser;
         }
-        // PGRST116 = no rows found, which is fine - we'll create the profile
         if (fetchError.code !== 'PGRST116') {
           console.error('Profile fetch error:', fetchError);
         }
       }
 
-      // 2. Self-Heal: If profile is missing, create it with 'user' role
-      // Note: Clients never log in - they use brand drop links with access keys
+      // 2. Self-Heal: If profile is missing, create it
       if (!profile) {
         const meta = sessionUser.user_metadata || {};
         const insertRow = {
           id: sessionUser.id,
           email: sessionUser.email,
-          role: 'user', // New users get 'user' role - access comes from memberships
+          role: 'user',
           name: meta.name || sessionUser.email?.split('@')[0] || 'User'
         };
         const { data: newProfile, error: createError } = await supabase
@@ -112,24 +111,21 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (createError) {
           console.error('Failed to auto-create profile:', createError);
           if (createError.code === '23505') {
-            // Duplicate key - another request created it, fetch again
             const { data: retryProfile } = await supabase.from('profiles').select('*').eq('id', sessionUser.id).single();
             profile = retryProfile;
           } else if (createError.code === '42501' || createError.message?.includes('permission')) {
             setError('Permission denied creating profile. Contact admin.');
-            setCurrentUser(fallbackUser);
-            return;
+            return fallbackUser;
           } else {
             setError('Failed to create user profile.');
-            setCurrentUser(fallbackUser);
-            return;
+            return fallbackUser;
           }
         } else {
           profile = newProfile;
         }
       }
 
-      // 3. Fetch memberships for this user
+      // 3. Fetch memberships
       let memberships: any[] = [];
       const { data: membershipData, error: membershipError } = await supabase
         .from('memberships')
@@ -137,7 +133,6 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .eq('user_id', sessionUser.id);
 
       if (membershipError) {
-        // Memberships table might not exist yet - that's okay during migration
         if (membershipError.code !== '42P01') {
           console.warn('Memberships fetch warning:', membershipError);
         }
@@ -146,137 +141,186 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (profile) {
-        setCurrentUser(mapProfileToUser(profile, memberships, sessionUser));
-      } else {
-        setCurrentUser(fallbackUser);
+        return mapProfileToUser(profile, memberships, sessionUser);
       }
+      return fallbackUser;
 
     } catch (e: any) {
       console.error('Session handling error:', e);
       setError(e.message || 'An unexpected error occurred.');
-      setCurrentUser(fallbackUser);
+      return fallbackUser;
     }
-  };
+  }, []);
+
+  const syncSession = useCallback(async (session: any) => {
+    // Guard: Don't sync if component unmounted
+    if (!mountedRef.current) return;
+
+    // Guard: Don't sync if no session
+    if (!session?.user) {
+      setCurrentUser(null);
+      setIsLoading(false);
+      setInitialized(true);
+      return;
+    }
+
+    // Guard: Prevent concurrent syncs
+    if (sessionSyncInProgress.current) {
+      console.log('Session sync already in progress, skipping...');
+      return;
+    }
+
+    // Guard: Skip if we've already synced this user
+    if (lastSyncedUserId.current === session.user.id && currentUser) {
+      setIsLoading(false);
+      setInitialized(true);
+      return;
+    }
+
+    sessionSyncInProgress.current = true;
+
+    try {
+      const SYNC_TIMEOUT_MS = 8000;
+
+      const timeoutPromise = new Promise<User>((_, reject) => {
+        setTimeout(() => reject(new Error('Profile sync timeout')), SYNC_TIMEOUT_MS);
+      });
+
+      const sessionPromise = handleUserSession(session.user);
+
+      const user = await Promise.race([sessionPromise, timeoutPromise]);
+
+      if (mountedRef.current) {
+        setCurrentUser(user);
+        lastSyncedUserId.current = session.user.id;
+      }
+    } catch (e: any) {
+      console.error('Session sync error:', e?.message);
+      if (mountedRef.current) {
+        setCurrentUser(createFallbackUser(session.user));
+        lastSyncedUserId.current = session.user.id;
+      }
+    } finally {
+      if (mountedRef.current) {
+        setIsLoading(false);
+        setInitialized(true);
+      }
+      sessionSyncInProgress.current = false;
+    }
+  }, [handleUserSession, currentUser]);
 
   useEffect(() => {
-    let mounted = true;
-    let profileLoaded = false;
+    mountedRef.current = true;
+    let timeoutId: NodeJS.Timeout;
 
-    const SYNC_TIMEOUT_MS = 8000;
-
-    const syncSession = async (session: any) => {
-      if (!mounted || !session?.user) return;
-
-      const timeoutId = setTimeout(() => {
-        if (!profileLoaded) {
-          console.warn("Profile fetch taking longer than expected...");
-        }
-      }, 5000);
-
-      // Race profile load against a hard timeout so we never hang forever
-      const timeoutPromise = new Promise<'timeout'>((resolve) => {
-        setTimeout(() => resolve('timeout'), SYNC_TIMEOUT_MS);
-      });
-      const sessionPromise = (async (): Promise<'session'> => {
-        await handleUserSession(session.user);
-        return 'session';
-      })();
-
+    const initialize = async () => {
       try {
-        const result = await Promise.race([sessionPromise, timeoutPromise]);
-        profileLoaded = result === 'session';
-        if (mounted && !profileLoaded) {
-          const fallback: User = {
-            id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.email?.split('@')[0] || 'User',
-            role: 'user',
-            podId: undefined,
-            memberships: []
-          };
-          setCurrentUser(fallback);
+        const { data: { session } } = await supabase.auth.getSession();
+        await syncSession(session);
+      } catch (e) {
+        console.error('Initial session fetch failed:', e);
+        if (mountedRef.current) {
+          setCurrentUser(null);
+          setIsLoading(false);
+          setInitialized(true);
         }
-      } catch (e: any) {
-        console.error("Session sync error:", e?.message);
-        if (mounted && !profileLoaded) {
-          const fallback: User = {
-            id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.email?.split('@')[0] || 'User',
-            role: 'user',
-            podId: undefined,
-            memberships: []
-          };
-          setCurrentUser(fallback);
-        }
-      } finally {
-        clearTimeout(timeoutId);
-        if (mounted) setIsLoading(false);
       }
     };
 
-    // Bootstrap immediately with getSession (avoids waiting for onAuthStateChange)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      if (session?.user) {
-        syncSession(session);
-      } else {
-        setCurrentUser(null);
+    // Safety timeout: never hang on loading > 10s
+    timeoutId = setTimeout(() => {
+      if (mountedRef.current && !initialized) {
+        console.warn('Auth initialization timeout - forcing completion');
         setIsLoading(false);
+        setInitialized(true);
       }
-    });
+    }, 10000);
 
-    // Safety: never hang on loading > 5s
-    const t = setTimeout(() => { if (mounted) setIsLoading(false); }, 5000);
+    initialize();
 
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
+      if (!mountedRef.current) return;
 
-      if (session?.user) {
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-          await syncSession(session);
-        } else if (mounted) setIsLoading(false);
-      } else {
-        setCurrentUser(null);
-        setError(null);
-        setIsLoading(false);
+      console.log('Auth state changed:', event);
+
+      switch (event) {
+        case 'SIGNED_IN':
+        case 'TOKEN_REFRESHED':
+          // Only sync if user changed or we haven't synced yet
+          if (session?.user?.id !== lastSyncedUserId.current) {
+            await syncSession(session);
+          }
+          break;
+
+        case 'SIGNED_OUT':
+          setCurrentUser(null);
+          setError(null);
+          lastSyncedUserId.current = null;
+          setIsLoading(false);
+          break;
+
+        case 'INITIAL_SESSION':
+          // Already handled by initialize() above, but handle anyway if racing
+          if (!initialized && session?.user) {
+            await syncSession(session);
+          }
+          break;
+
+        default:
+          // USER_UPDATED, PASSWORD_RECOVERY, etc.
+          if (session?.user && session.user.id === lastSyncedUserId.current) {
+            // Refetch profile for user updates
+            const updatedUser = await handleUserSession(session.user);
+            if (mountedRef.current) {
+              setCurrentUser(updatedUser);
+            }
+          }
       }
     });
 
     return () => {
-      mounted = false;
-      clearTimeout(t);
+      mountedRef.current = false;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Empty deps - only run once on mount
 
   const refetchUser = useCallback(async () => {
+    if (!mountedRef.current) return;
+
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) await handleUserSession(session.user);
+    if (session?.user) {
+      // Force refetch by clearing the cached user ID
+      lastSyncedUserId.current = null;
+      await syncSession(session);
+    }
+  }, [syncSession]);
+
+  const signOut = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      setError(null);
+      lastSyncedUserId.current = null;
+    } catch (e: any) {
+      console.error('Sign out error:', e);
+      setError('Failed to sign out');
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const signOut = async () => {
-    setIsLoading(true);
-    await supabase.auth.signOut();
-    setCurrentUser(null);
-    setIsLoading(false);
-  };
-
-  // Check if user has access to a specific pod
   const hasPodAccess = useCallback((podId: string): boolean => {
     if (!currentUser) return false;
-    // Admins have access to all pods
     if (currentUser.role === 'admin') return true;
-    // Check memberships
     return currentUser.memberships?.some(m => m.podId === podId && m.status === 'active') ?? false;
   }, [currentUser]);
 
-  // Get user's role in a specific pod
   const getPodRole = useCallback((podId: string): MembershipRole | null => {
     if (!currentUser) return null;
-    // Admins effectively have pod_lead access everywhere
     if (currentUser.role === 'admin') return 'pod_lead';
-    // Check memberships
     const membership = currentUser.memberships?.find(m => m.podId === podId && m.status === 'active');
     return membership?.role ?? null;
   }, [currentUser]);
@@ -285,7 +329,6 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!currentUser) return false;
     const { role, id, memberships } = currentUser;
 
-    // Get the user's highest role across all their memberships
     const isPodLead = memberships?.some(m => m.role === 'pod_lead' && m.status === 'active') ?? false;
     const isPodMember = memberships?.some(m => m.status === 'active') ?? false;
 
@@ -301,7 +344,6 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       case 'take_brief':
         return role === 'admin' || isPodMember;
       case 'deliver_brief':
-        // Owner, Lead, or Admin can deliver
         return role === 'admin' || isPodLead || id === resourceOwnerId;
       default:
         return false;
@@ -309,7 +351,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [currentUser]);
 
   return (
-    <UserContext.Provider value={{ currentUser, checkPermission, hasPodAccess, getPodRole, isLoading, signOut, error, refetchUser }}>
+    <UserContext.Provider value={{
+      currentUser,
+      checkPermission,
+      hasPodAccess,
+      getPodRole,
+      isLoading,
+      initialized,
+      signOut,
+      error,
+      refetchUser
+    }}>
       {children}
     </UserContext.Provider>
   );
