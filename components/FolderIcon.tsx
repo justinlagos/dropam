@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Folder as FolderIconSvg } from 'lucide-react';
-import { motion, useMotionValue } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Folder, COLORS } from '../types';
 import { BRIEF_DROP_TYPE } from './BriefIcon';
+import { useCanvasTransform } from './SpatialCanvas';
+import { useDesktopDrag } from './hooks/useDesktopDrag';
 
 interface FolderIconProps {
   folder: Folder;
@@ -12,7 +14,8 @@ interface FolderIconProps {
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick?: (e: React.MouseEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  onDragEnd?: (e: any, info: any) => void;
+  /** Commit world position on drag end. When set, canvas pointer-drag is used. */
+  onCommitPosition?: (position: { x: number; y: number }) => void;
   onBriefDrop?: (briefId: string) => void;
   style?: React.CSSProperties;
 }
@@ -25,46 +28,20 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
   onClick,
   onDoubleClick,
   onContextMenu,
-  onDragEnd,
+  onCommitPosition,
   onBriefDrop,
   style
 }) => {
-  const [isDragging, setIsDragging] = useState(false);
   const [isDropTarget, setIsDropTarget] = useState(false);
-
-  // Use motion values for smooth, snap-free dragging
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-
-  // Reset motion values when folder position changes externally
-  useEffect(() => {
-    x.set(0);
-    y.set(0);
-  }, [folder.position?.x, folder.position?.y]);
-
-  const handleDragStart = () => {
-    setIsDragging(true);
-  };
-
-  const handleDragEnd = (event: any, info: any) => {
-    setIsDragging(false);
-    if (onDragEnd) {
-      // Calculate the total offset from original position
-      const offsetX = x.get();
-      const offsetY = y.get();
-
-      // Call onDragEnd with the offset info
-      onDragEnd(event, {
-        offset: { x: offsetX, y: offsetY },
-        point: info.point,
-        velocity: info.velocity
-      });
-
-      // Reset motion values since the parent will update the actual position
-      x.set(0);
-      y.set(0);
-    }
-  };
+  const getWorldFromClient = useCanvasTransform();
+  const initialPosition = { x: folder.position?.x ?? 0, y: folder.position?.y ?? 0 };
+  const canvasDrag = useDesktopDrag({
+    initialPosition,
+    getWorldFromClient,
+    onCommitPosition: onCommitPosition ?? (() => {}),
+    enabled: Boolean(onCommitPosition),
+  });
+  const isDragging = canvasDrag.isDragging;
 
   // HTML5 Drag & Drop handlers for accepting brief drops
   const handleDragOver = (e: React.DragEvent) => {
@@ -92,20 +69,16 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
 
   return (
     <motion.div
-      drag
-      dragMomentum={false}
-      dragElastic={0}
-      dragConstraints={{ top: -Infinity, left: -Infinity, right: Infinity, bottom: Infinity }}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
+      style={{ ...style, ...canvasDrag.style }}
+      transition={{ duration: 0 }}
+      layout={false}
+      onPointerDown={canvasDrag.handlers.onPointerDown}
+      onPointerMove={canvasDrag.handlers.onPointerMove}
+      onPointerUp={canvasDrag.handlers.onPointerUp}
+      onPointerLeave={canvasDrag.handlers.onPointerUp}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      style={{
-        ...style,
-        x,
-        y,
-      }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}

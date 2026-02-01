@@ -164,7 +164,7 @@ export const PodCanvasPage: React.FC = () => {
                   onClick={(e) => { e.stopPropagation(); setSelectedBrief(null); setSelectedIds(new Set([folder.id])); }}
                   onDoubleClick={(e) => { e.stopPropagation(); setOpenFolderId(folder.id); setSelectedIds(new Set()); }}
                   onContextMenu={(e) => openContextMenu(e, 'folder', folder.id)}
-                  onDragEnd={(_, info) => updateFolderPosition(folder.id, { x: (folder.position?.x ?? 0) + info.offset.x, y: (folder.position?.y ?? 0) + info.offset.y })}
+                  onCommitPosition={(pos) => updateFolderPosition(folder.id, pos)}
                   onBriefDrop={(briefId) => moveBriefToFolder(briefId, folder.id)}
                   style={{ left: folder.position?.x ?? 0, top: folder.position?.y ?? 0, position: 'absolute' }}
                 />
@@ -181,22 +181,17 @@ export const PodCanvasPage: React.FC = () => {
                   selected={selectedIds.has(brief.id)}
                   draggableForFolder={!openFolderId} // Only allow drag-to-folder at root level
                   onClick={(e) => {
-                    // Single click: select only (highlight)
                     e.stopPropagation();
                     setSelectedIds(new Set([brief.id]));
                   }}
                   onDoubleClick={(e) => {
-                    // Double click: open side panel
                     e.stopPropagation();
                     setSelectedBrief(brief);
                     setPanelState({ activeTab: 'details' });
                     setSelectedIds(new Set([brief.id]));
                   }}
                   onContextMenu={(e) => openContextMenu(e, 'brief', brief.id)}
-                  onDragEnd={(_, info) => {
-                    const pos = brief.position || { x: 0, y: 0 };
-                    updateBriefPosition(brief.id, { x: pos.x + info.offset.x, y: pos.y + info.offset.y });
-                  }}
+                  onCommitPosition={(pos) => updateBriefPosition(brief.id, pos)}
                   style={{ left: brief.position?.x ?? 0, top: brief.position?.y ?? 0, position: 'absolute' }}
                 />
               );

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { BriefIcon } from '../components/BriefIcon';
+import { FolderIcon } from '../components/FolderIcon';
 import { SidePanel } from '../components/SidePanel';
 import { FileUpload } from '../components/FileUpload';
-import { ClientFolderIcon } from '../components/ClientFolderIcon';
+import { SpatialCanvas } from '../components/SpatialCanvas';
 import { ClientFolderSidePanel } from '../components/ClientFolderSidePanel';
 import {
   verifyBrandAccess,
@@ -13,7 +14,7 @@ import {
   type ClientBrief,
 } from '../services/clientApi';
 import { Brief, Brand } from '../types';
-import { getClientFolders, setClientFolders, generateFolderId, type ClientFolder } from '../utils/clientFolders';
+import { getClientFolders, setClientFolders, getClientBriefPositions, setClientBriefPositions, generateFolderId, type ClientFolder } from '../utils/clientFolders';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, CheckCircle2, XCircle, AlertCircle, Download } from 'lucide-react';
 import { ContextMenu } from '../components/ContextMenu';
@@ -119,6 +120,7 @@ export const ClientDropPage: React.FC = () => {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'brief' | 'folder'; brief?: Brief; folder?: ClientFolder } | null>(null);
+  const [briefPositions, setBriefPositions] = useState<Record<string, { x: number; y: number }>>({});
 
   const brandName = brandSlug ? brandSlug.charAt(0).toUpperCase() + brandSlug.slice(1) : '';
 
@@ -187,6 +189,11 @@ export const ClientDropPage: React.FC = () => {
 
   useEffect(() => {
     if (!shareToken || !verified) return;
+    setBriefPositions(getClientBriefPositions(shareToken));
+  }, [shareToken, verified]);
+
+  useEffect(() => {
+    if (!shareToken || !verified) return;
     setClientFolders(shareToken, folders);
   }, [shareToken, verified, folders]);
 
@@ -210,6 +217,22 @@ export const ClientDropPage: React.FC = () => {
     setFolders((prev) => prev.filter((f) => f.id !== folderId));
     if (selectedFolder?.id === folderId) setSelectedFolder(null);
   }, [selectedFolder?.id]);
+
+  const updateFolderPosition = useCallback((folderId: string, position: { x: number; y: number }) => {
+    setFolders((prev) => {
+      const next = prev.map((f) => (f.id === folderId ? { ...f, position } : f));
+      if (shareToken) setClientFolders(shareToken, next);
+      return next;
+    });
+  }, [shareToken]);
+
+  const updateBriefPosition = useCallback((briefId: string, position: { x: number; y: number }) => {
+    setBriefPositions((prev) => {
+      const next = { ...prev, [briefId]: position };
+      if (shareToken) setClientBriefPositions(shareToken, next);
+      return next;
+    });
+  }, [shareToken]);
 
   const uploadSingleFile = useCallback(
     (file: File): Promise<ClientBrief | null> =>
@@ -292,7 +315,7 @@ export const ClientDropPage: React.FC = () => {
             return;
           }
           const folderName = entry.name || 'New folder';
-          const newFolder: ClientFolder = { id: generateFolderId(), name: folderName, briefIds: [] };
+          const newFolder: ClientFolder = { id: generateFolderId(), name: folderName, briefIds: [], position: { x: 120, y: 120 } };
           setFolders((prev) => [...prev, newFolder]);
           setIsUploading(true);
           setUploadProgress(0);
@@ -401,64 +424,69 @@ export const ClientDropPage: React.FC = () => {
         <p className="text-[10px] text-gray-500 mt-0.5">{brand.name}</p>
       </div>
 
-      <div
-        className="flex-1 relative z-10 overflow-y-auto flex flex-col min-h-full px-6 no-scrollbar"
-        onClick={() => { setSelectedBrief(null); setSelectedFolder(null); setContextMenu(null); }}
-      >
+      <div className="flex-1 relative z-10 min-h-0 flex flex-col">
         {loading ? (
-          <div className="flex items-center justify-center flex-1">
+          <div className="flex-1 flex items-center justify-center">
             <Loader2 className="animate-spin text-[#111111]" size={28} />
           </div>
         ) : (
-          <>
-            {folders.length > 0 && (
-              <div className="w-full max-w-[1600px] mx-auto pt-8 pb-4 flex items-center gap-4 overflow-x-auto no-scrollbar">
-                {folders.map((folder) => (
-                  <div key={folder.id} onClick={(e) => e.stopPropagation()}>
-                    <ClientFolderIcon
-                      folderId={folder.id}
-                      name={folder.name}
-                      count={folder.briefIds.length}
-                      selected={selectedFolder?.id === folder.id}
-                      onClick={() => { setSelectedBrief(null); setSelectedFolder(folder); }}
-                      onDoubleClick={() => { setSelectedBrief(null); setSelectedFolder(folder); }}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setContextMenu({ x: e.clientX, y: e.clientY, type: 'folder', folder });
-                      }}
-                      onBriefDrop={(briefId) => moveBriefToFolder(briefId, folder.id)}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-            {rootBriefs.length === 0 && folders.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center">
+          <SpatialCanvas
+            onCanvasClick={() => { setSelectedBrief(null); setSelectedFolder(null); setContextMenu(null); }}
+          >
+            {folders.map((folder) => {
+              const folderWithPosition = {
+                id: folder.id,
+                podId: '',
+                name: folder.name,
+                position: folder.position ?? { x: 0, y: 0 },
+                createdAt: '',
+              };
+              return (
+                <FolderIcon
+                  key={folder.id}
+                  folder={folderWithPosition as any}
+                  itemCount={folder.briefIds.length}
+                  selected={selectedFolder?.id === folder.id}
+                  onClick={(e) => { e.stopPropagation(); setSelectedBrief(null); setSelectedFolder(folder); }}
+                  onDoubleClick={(e) => { e.stopPropagation(); setSelectedBrief(null); setSelectedFolder(folder); }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setContextMenu({ x: e.clientX, y: e.clientY, type: 'folder', folder });
+                  }}
+                  onCommitPosition={(pos) => updateFolderPosition(folder.id, pos)}
+                  onBriefDrop={(briefId) => moveBriefToFolder(briefId, folder.id)}
+                  style={{ left: folderWithPosition.position.x, top: folderWithPosition.position.y, position: 'absolute' }}
+                />
+              );
+            })}
+            {rootBriefs.map((brief, i) => {
+              const pos = briefPositions[brief.id] ?? { x: 80 + (i % 4) * 140, y: 80 + Math.floor(i / 4) * 160 };
+              const briefWithPosition = { ...brief, position: pos };
+              return (
+                <BriefIcon
+                  key={brief.id}
+                  brief={briefWithPosition}
+                  onClick={(e) => { e.stopPropagation(); setSelectedFolder(null); setSelectedBrief(brief); }}
+                  onDoubleClick={(e) => { e.stopPropagation(); setSelectedFolder(null); setSelectedBrief(brief); }}
+                  draggableForFolder={true}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setContextMenu({ x: e.clientX, y: e.clientY, type: 'brief', brief });
+                  }}
+                  onCommitPosition={(position) => updateBriefPosition(brief.id, position)}
+                  style={{ left: pos.x, top: pos.y, position: 'absolute' }}
+                />
+              );
+            })}
+            {rootBriefs.length === 0 && folders.length === 0 && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <p className="text-[#111111] text-lg font-medium tracking-tight">Drop your brief here</p>
                 <p className="text-gray-400 text-sm mt-2">Drag a file or folder onto this page</p>
               </div>
-            ) : (
-              <div className="w-full max-w-[1600px] mx-auto py-8 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-x-6 gap-y-10">
-                {rootBriefs.map((brief) => (
-                  <div key={brief.id} onClick={(e) => e.stopPropagation()}>
-                    <BriefIcon
-                      brief={brief}
-                      onClick={() => { setSelectedFolder(null); setSelectedBrief(brief); }}
-                      onDoubleClick={() => { setSelectedFolder(null); setSelectedBrief(brief); }}
-                      draggableForFolder={true}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setContextMenu({ x: e.clientX, y: e.clientY, type: 'brief', brief });
-                      }}
-                      style={{ position: 'relative' }}
-                    />
-                  </div>
-                ))}
-              </div>
             )}
-          </>
+          </SpatialCanvas>
         )}
       </div>
 

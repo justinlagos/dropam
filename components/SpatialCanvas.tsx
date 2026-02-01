@@ -1,5 +1,14 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { motion } from 'framer-motion';
+import { clientToWorld } from '../utils/coords';
+
+export type GetWorldFromClient = (clientX: number, clientY: number) => { x: number; y: number };
+
+const CanvasTransformContext = createContext<GetWorldFromClient | null>(null);
+
+export function useCanvasTransform(): GetWorldFromClient | null {
+  return useContext(CanvasTransformContext);
+}
 
 interface SpatialCanvasProps {
   children: React.ReactNode;
@@ -15,7 +24,19 @@ export const SpatialCanvas: React.FC<SpatialCanvasProps> = ({
     onCanvasContextMenu
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+
+  const getWorldFromClient = useCallback<GetWorldFromClient>((clientX, clientY) => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    return clientToWorld(clientX, clientY, {
+      rect,
+      panX: transform.x,
+      panY: transform.y,
+      zoom: transform.scale,
+    });
+  }, [transform.x, transform.y, transform.scale]);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [selectionBox, setSelectionBox] = useState<{ startX: number, startY: number, currentX: number, currentY: number } | null>(null);
@@ -149,7 +170,9 @@ export const SpatialCanvas: React.FC<SpatialCanvasProps> = ({
   };
 
   return (
-    <div 
+    <CanvasTransformContext.Provider value={getWorldFromClient}>
+    <div
+        ref={wrapperRef}
         className={`w-full h-full overflow-hidden relative bg-white ${isSpacePressed ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
@@ -191,5 +214,6 @@ export const SpatialCanvas: React.FC<SpatialCanvasProps> = ({
             Space + Drag to Pan • CMD + Scroll to Zoom • Right Click for Menu
         </div>
     </div>
+    </CanvasTransformContext.Provider>
   );
 };
