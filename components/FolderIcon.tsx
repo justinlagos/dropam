@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Folder as FolderIconSvg } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, useMotionValue } from 'framer-motion';
 import { Folder, COLORS } from '../types';
 
 interface FolderIconProps {
@@ -26,32 +26,74 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
   onDragEnd,
   style
 }) => {
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Use motion values for smooth, snap-free dragging
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+
+  // Reset motion values when folder position changes externally
+  useEffect(() => {
+    x.set(0);
+    y.set(0);
+  }, [folder.position?.x, folder.position?.y]);
+
+  const handleDragStart = () => {
+    setIsDragging(true);
+  };
+
+  const handleDragEnd = (event: any, info: any) => {
+    setIsDragging(false);
+    if (onDragEnd) {
+      // Calculate the total offset from original position
+      const offsetX = x.get();
+      const offsetY = y.get();
+
+      // Call onDragEnd with the offset info
+      onDragEnd(event, {
+        offset: { x: offsetX, y: offsetY },
+        point: info.point,
+        velocity: info.velocity
+      });
+
+      // Reset motion values since the parent will update the actual position
+      x.set(0);
+      y.set(0);
+    }
+  };
+
   return (
     <motion.div
       drag
       dragMomentum={false}
       dragElastic={0}
-      onDragEnd={onDragEnd}
-      style={style}
+      dragConstraints={{ top: -Infinity, left: -Infinity, right: Infinity, bottom: Infinity }}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      style={{
+        ...style,
+        x,
+        y,
+      }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       whileHover={{ scale: 1.02 }}
-      whileDrag={{ scale: 1.02, zIndex: 100, cursor: 'grabbing' }}
-      animate={isTarget ? { scale: 1.1 } : { scale: 1 }}
-      className={`draggable-item absolute w-[120px] h-[120px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-xl transition-all duration-150 ease-out
+      animate={isTarget ? { scale: 1.1 } : isDragging ? { scale: 1.05, zIndex: 100 } : { scale: 1 }}
+      className={`draggable-item absolute w-[120px] h-[120px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-xl transition-colors duration-150 ease-out
          ${selected ? 'bg-gray-100/80 ring-1 ring-gray-200' : 'hover:bg-gray-50/80'}
+         ${isDragging ? 'cursor-grabbing shadow-2xl' : ''}
       `}
     >
       <div className={`relative w-16 h-14 flex items-center justify-center mb-1 rounded-xl transition-all duration-150 ease-out pointer-events-none
         ${selected ? 'ring-1 ring-gray-300' : ''}
         ${isTarget ? 'ring-4 ring-blue-300 bg-blue-50' : ''}
       `}>
-        <FolderIconSvg 
-          size={56} 
-          fill={COLORS.folder} 
-          stroke={COLORS.folder} 
-          className={`drop-shadow-sm`}
+        <FolderIconSvg
+          size={56}
+          fill={COLORS.folder}
+          stroke={COLORS.folder}
+          className="drop-shadow-sm"
         />
         {itemCount > 0 && (
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 mt-2 text-[10px] font-bold text-black/40">
