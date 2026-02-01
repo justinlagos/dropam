@@ -80,6 +80,10 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
     }
   };
 
+  const timestampRaw = brief.createdAt ?? brief.submittedAt;
+  const tileTimestamp = timestampRaw
+    ? new Date(timestampRaw).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+    : '';
   const formattedTime = new Date(brief.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
   useEffect(() => {
@@ -124,19 +128,28 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
     }
   };
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (canDragCanvas && canvasDrag.dragConsumedRef.current) {
+      canvasDrag.dragConsumedRef.current = false;
+      e.stopPropagation();
+      return;
+    }
+    onClick(e);
+  };
+
   const sharedProps = {
     draggable: draggableForFolder,
     onDragStartCapture: handleDragStart,
-    onClick,
+    onClick: handleClick,
     onDoubleClick,
     onContextMenu,
     onMouseEnter: () => setIsHovered(true),
     onMouseLeave: () => setIsHovered(false),
     whileHover: { scale: 1.02 } as const,
-    animate: (isTarget ? { scale: 1.2 } : isDragging ? { scale: 1.05, zIndex: 100 } : { scale: 1 }) as const,
+    animate: (isTarget ? { scale: 1.2 } : isDragging ? { zIndex: 100 } : { scale: 1 }) as const,
     className: `${canDragCanvas || canDragMotion ? 'draggable-item' : ''} w-[120px] h-[140px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-2xl transition-colors duration-150 ease-out
              ${selected ? 'bg-gray-100/80 ring-1 ring-gray-200' : 'hover:bg-gray-50/80'}
-             ${isDragging ? 'cursor-grabbing shadow-2xl' : ''}`,
+             ${isDragging ? 'cursor-grabbing' : ''}`,
   };
 
   if (canDragCanvas) {
@@ -178,8 +191,11 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
           </div>
 
           <span className="text-[9px] text-gray-400 mt-1.5 font-medium">
-            {showMeta && brief.ownerName ? brief.ownerName : formattedTime}
+            {showMeta && brief.ownerName ? brief.ownerName : (tileTimestamp || formattedTime)}
           </span>
+          {showMeta && tileTimestamp && brief.ownerName && (
+            <span className="text-[8px] text-gray-400 mt-0.5 font-medium">{tileTimestamp}</span>
+          )}
 
           {/* POD tag for admin view */}
           {podName && (
@@ -271,8 +287,11 @@ export const BriefIcon: React.FC<BriefIconProps> = ({
             {brief.title}
           </div>
           <span className="text-[9px] text-gray-400 mt-1.5 font-medium">
-            {showMeta && brief.ownerName ? brief.ownerName : formattedTime}
+            {showMeta && brief.ownerName ? brief.ownerName : (tileTimestamp || formattedTime)}
           </span>
+          {showMeta && tileTimestamp && brief.ownerName && (
+            <span className="text-[8px] text-gray-400 mt-0.5 font-medium">{tileTimestamp}</span>
+          )}
           {podName && (
             <span className="mt-1 px-1.5 py-0.5 text-[7px] uppercase tracking-wider font-bold text-gray-400 bg-gray-100 rounded">
               {podName}

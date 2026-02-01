@@ -53,7 +53,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
   return (
     <div
       ref={menuRef}
-      className="fixed z-[9999] min-w-[200px] bg-white rounded-lg shadow-xl border border-gray-100 py-1 flex flex-col animate-in fade-in zoom-in-95 duration-75 text-sm"
+      className="fixed z-[9999] min-w-[200px] bg-white rounded-lg shadow-sm border border-gray-100/80 py-1 flex flex-col animate-in fade-in zoom-in-95 duration-75 text-sm"
       style={style}
     >
       {items.map((item, index) => {
@@ -95,7 +95,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
             {/* Submenu */}
             {hasSubmenu && openSubmenuIndex === index && submenuPosition && (
               <div
-                className="fixed z-[10000] min-w-[180px] max-h-[300px] overflow-y-auto bg-white rounded-lg shadow-xl border border-gray-100 py-1 flex flex-col text-sm"
+                className="fixed z-[10000] min-w-[180px] max-h-[300px] overflow-y-auto bg-white rounded-lg shadow-sm border border-gray-100/80 py-1 flex flex-col text-sm"
                 style={{
                   top: submenuPosition.y,
                   left: submenuPosition.x + 200 > window.innerWidth ? submenuPosition.x - 380 : submenuPosition.x,

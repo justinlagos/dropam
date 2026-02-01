@@ -28,6 +28,8 @@ function mapBriefRow(b: any): Brief {
     ownerId: b.owner_id,
     ownerName: b.owner_name,
     submittedAt: b.submitted_at,
+    createdAt: b.created_at,
+    updatedAt: b.updated_at,
     deadline: b.deadline,
     guidance: b.guidance,
     position: { x: Number(b.position_x), y: Number(b.position_y) },
@@ -111,7 +113,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               ownerId: updated.owner_id,
               ownerName: updated.owner_name,
               guidance: updated.guidance,
-              deadline: updated.deadline
+              deadline: updated.deadline,
+              createdAt: updated.created_at ?? b.createdAt,
+              updatedAt: updated.updated_at ?? b.updatedAt
             } : b));
           } else if (payload.eventType === 'INSERT') {
             const inserted = payload.new as any;

@@ -102,7 +102,6 @@ export function getBriefContextMenuItems(
     { label: 'Open details', onClick: () => { callbacks.openDetails(); callbacks.closeMenu(); } },
     ...(hasFiles ? [{ label: 'Download files', onClick: () => { downloadBriefFiles(brief); callbacks.closeMenu(); } }] : []),
     ...(canTake ? [{ label: 'Take brief', onClick: () => { currentUser && actions.assignBrief(brief.id, currentUser.id, currentUser.name); callbacks.closeMenu(); } }] : []),
-    ...(brief.status === 'in_progress' ? [{ label: 'Mark in progress', onClick: () => {}, disabled: true }] : []),
     ...(canDeliver && brief.status === 'in_progress' ? [{ label: 'Move to review', onClick: () => { actions.updateBriefStatus(brief.id, 'review'); callbacks.closeMenu(); } }] : []),
     ...(canDeliver && (brief.status === 'in_progress' || brief.status === 'review') ? [{ label: 'Deliver and send to client', onClick: () => { actions.updateBriefStatus(brief.id, 'delivered'); callbacks.closeMenu(); } }] : []),
     { label: 'Send message to client', onClick: () => { callbacks.openMessagesClient(); callbacks.closeMenu(); } },

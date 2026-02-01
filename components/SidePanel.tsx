@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send as SendIcon, FileText, CheckCircle2, Lock, Globe, Calendar, User, Download } from 'lucide-react';
+import { X, Send as SendIcon, FileText, CheckCircle2, Lock, Globe, User, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brief, Brand, COLORS } from '../types';
 import { useUser } from '../contexts/UserContext';
@@ -170,24 +170,12 @@ export const SidePanel: React.FC<SidePanelProps> = ({
           </div>
         )}
 
-        {/* Properties / Meta (internal only) */}
+        {/* Properties / Meta (internal only): owner only, no date picker */}
         {viewType === 'internal' && (
-          <div ref={metaRef} className="mb-6">
-            <h3 className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-3">Properties</h3>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Calendar size={14} className="text-gray-400" />
-                <input
-                  type="date"
-                  className="flex-1 px-3 py-2 text-sm border border-gray-100 rounded-lg outline-none focus:border-gray-200"
-                  value={brief.deadline ? new Date(brief.deadline).toISOString().slice(0, 10) : ''}
-                  onChange={(e) => updateBriefMeta(brief.id, { deadline: e.target.value ? new Date(e.target.value) : null })}
-                />
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <User size={14} className="text-gray-400" />
-                <span>{brief.ownerName || 'Unassigned'}</span>
-              </div>
+          <div ref={metaRef} className="mb-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <User size={14} className="text-gray-400" />
+              <span>{brief.ownerName || 'Unassigned'}</span>
             </div>
           </div>
         )}
@@ -197,7 +185,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
         {/* Brief Files (Original uploads from client) */}
         {brief.files.filter(f => f.type === 'brief' || f.type === 'attachment').length > 0 && (
           <div className="mb-6">
-            <h3 className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">Brief Files</h3>
+            <h3 className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">Files</h3>
             <div className="space-y-2">
               {brief.files.filter(f => f.type === 'brief' || f.type === 'attachment').map(file => {
                 const fileKind = getFileKind(file.name);
@@ -350,6 +338,21 @@ export const SidePanel: React.FC<SidePanelProps> = ({
                      <SendIcon size={12} className="text-white" />
                  </button>
              </div>
+        </div>
+
+        {/* Read-only timestamps at bottom */}
+        <div className="mt-4 pt-4 border-t border-black/5">
+          <div className="flex flex-col gap-1 text-[10px] text-gray-400">
+            {(brief.createdAt || brief.submittedAt) && (
+              <span>Created {new Date(brief.createdAt ?? brief.submittedAt).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+            )}
+            {brief.updatedAt && (
+              <span>Updated {new Date(brief.updatedAt).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+            )}
+            {brief.status === 'delivered' && (
+              <span>Delivered</span>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>

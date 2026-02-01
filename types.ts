@@ -96,7 +96,9 @@ export interface Brief {
   priority: Priority;
   ownerId?: string;
   ownerName?: string;
-  submittedAt: string; 
+  submittedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
   deadline: string | null;
   files: FileAttachment[];
   messages: Message[];

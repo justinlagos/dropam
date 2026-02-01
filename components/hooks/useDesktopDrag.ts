@@ -5,6 +5,8 @@
  */
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 
+const DRAG_THRESHOLD_WORLD = 5;
+
 export type GetWorldFromClient = (clientX: number, clientY: number) => { x: number; y: number };
 
 export interface UseDesktopDragOptions {
@@ -26,6 +28,9 @@ export function useDesktopDrag({
   const [dragging, setDragging] = useState(false);
   const pointerOffsetInWorld = useRef({ x: 0, y: 0 });
   const elementRef = useRef<HTMLElement | null>(null);
+  const pointerDownWorld = useRef({ x: 0, y: 0 });
+  /** Set true when movement exceeded threshold this gesture; consumer uses to suppress click. */
+  const dragConsumedRef = useRef(false);
 
   useEffect(() => {
     if (!dragging) setCurrent(initialPosition);
@@ -39,10 +44,12 @@ export function useDesktopDrag({
       elementRef.current = e.currentTarget as HTMLElement;
       e.currentTarget.setPointerCapture(e.pointerId);
       const world = getWorldFromClient(e.clientX, e.clientY);
+      pointerDownWorld.current = world;
       pointerOffsetInWorld.current = {
         x: world.x - initialPosition.x,
         y: world.y - initialPosition.y,
       };
+      dragConsumedRef.current = false;
       setDragging(true);
     },
     [enabled, getWorldFromClient, initialPosition.x, initialPosition.y]
@@ -53,6 +60,9 @@ export function useDesktopDrag({
       if (!dragging || !enabled || !getWorldFromClient) return;
       e.preventDefault();
       const world = getWorldFromClient(e.clientX, e.clientY);
+      const dx = world.x - pointerDownWorld.current.x;
+      const dy = world.y - pointerDownWorld.current.y;
+      if (Math.hypot(dx, dy) > DRAG_THRESHOLD_WORLD) dragConsumedRef.current = true;
       const next = {
         x: world.x - pointerOffsetInWorld.current.x,
         y: world.y - pointerOffsetInWorld.current.y,
@@ -100,5 +110,7 @@ export function useDesktopDrag({
     style,
     handlers: { onPointerDown: handlePointerDown, onPointerMove: handlePointerMove, onPointerUp: handlePointerUp },
     isDragging: dragging,
+    /** True when this gesture moved beyond threshold; use in onClick to avoid opening on drag-release. */
+    dragConsumedRef,
   };
 }

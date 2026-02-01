@@ -1,5 +1,16 @@
 # Dropam OS Changelog
 
+## Fix drag world coords, remove date field, add timestamps, clean menus, refine side panel
+
+- **Drag**: All positioning in world coordinates. SpatialCanvas exposes `getWorldFromClient` (screenToWorld); `worldToClient` in coords and `getClientFromWorld` in SpatialCanvas for worldToScreen. useDesktopDrag uses grab offset in world space; cursor stays attached under pan/zoom. Movement threshold differentiates click vs drag; no shadow/scale on drag (BriefIcon, FolderIcon).
+- **Side panel**: Removed date picker from Properties. Added read-only timestamps at bottom (Created, Updated, Delivered when available). Properties shows owner only. "Brief Files" renamed to "Files".
+- **Tile**: BriefIcon shows subtle timestamp (e.g. 01 Feb, 06:12) from `createdAt`/`submittedAt`.
+- **Top bar**: PodCanvasPage shows user name and role (e.g. "Justin, Admin", "Esther, Pod member") near Settings.
+- **Context menu**: Removed disabled "Mark in progress". ContextMenu styling: shadow-sm, soft border (minimal).
+- **Types/Data**: Brief has optional `createdAt`, `updatedAt`; mapBriefRow and realtime UPDATE merge them. docs/proofs/ README lists proof screenshot names.
+
+---
+
 ## Summary of Changes (Launch-Ready OS-Style Product)
 
 ### A) Freeform Drag (No Grid Snapping)

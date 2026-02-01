@@ -28,3 +28,19 @@ export function clientToWorld(
     y: (clientY - t.rect.top - t.panY) / t.zoom,
   };
 }
+
+/**
+ * Convert world (canvas content) coordinates to client (viewport) coordinates.
+ * clientX = rect.left + panX + worldX * zoom
+ * clientY = rect.top + panY + worldY * zoom
+ */
+export function worldToClient(
+  worldX: number,
+  worldY: number,
+  t: CanvasTransform
+): { x: number; y: number } {
+  return {
+    x: t.rect.left + t.panX + worldX * t.zoom,
+    y: t.rect.top + t.panY + worldY * t.zoom,
+  };
+}

@@ -83,10 +83,10 @@ export const FolderIcon: React.FC<FolderIconProps> = ({
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       whileHover={{ scale: 1.02 }}
-      animate={isTarget || isDropTarget ? { scale: 1.1 } : isDragging ? { scale: 1.05, zIndex: 100 } : { scale: 1 }}
+      animate={isTarget || isDropTarget ? { scale: 1.1 } : isDragging ? { zIndex: 100 } : { scale: 1 }}
       className={`draggable-item absolute w-[120px] h-[120px] flex flex-col items-center justify-start pt-2 cursor-pointer select-none rounded-xl transition-colors duration-150 ease-out
          ${selected ? 'bg-gray-100/80 ring-1 ring-gray-200' : 'hover:bg-gray-50/80'}
-         ${isDragging ? 'cursor-grabbing shadow-2xl' : ''}
+         ${isDragging ? 'cursor-grabbing' : ''}
          ${isDropTarget ? 'bg-blue-50 ring-2 ring-blue-400' : ''}
       `}
     >

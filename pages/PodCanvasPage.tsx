@@ -18,7 +18,7 @@ import { getFolderContextMenuItems, getCanvasContextMenuItems } from '../actions
 export const PodCanvasPage: React.FC = () => {
   const { podSlug } = useParams<{ podSlug: string }>();
   const { pods, briefs, brands, folders, loading } = useData();
-  const { currentUser, checkPermission, hasPodAccess } = useUser();
+  const { currentUser, checkPermission, hasPodAccess, getPodRole } = useUser();
   const actions = useActions();
   const navigate = useNavigate();
   const { updateBriefPosition, updateFolderPosition, moveBriefToFolder, createFolder, updateBriefStatus, deleteBrief, deleteFolder, assignBrief, updateBriefMeta, updateBriefTitle, updateFolderName } = actions;
@@ -136,7 +136,14 @@ export const PodCanvasPage: React.FC = () => {
               />
             </div>
           </div>
-          <Link to="/settings" className="text-xs font-medium text-gray-500 hover:text-[#111111]">Settings</Link>
+          <div className="flex items-center gap-3">
+            {currentUser && (
+              <span className="text-[11px] text-gray-500 font-medium">
+                {currentUser.name}, {currentUser.role === 'admin' ? 'Admin' : (getPodRole(pod.id) === 'pod_lead' ? 'Pod lead' : 'Pod member')}
+              </span>
+            )}
+            <Link to="/settings" className="text-xs font-medium text-gray-500 hover:text-[#111111]">Settings</Link>
+          </div>
         </div>
       </div>
 

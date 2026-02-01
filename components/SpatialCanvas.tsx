@@ -1,8 +1,14 @@
 import React, { useRef, useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { motion } from 'framer-motion';
-import { clientToWorld } from '../utils/coords';
+import { clientToWorld, worldToClient } from '../utils/coords';
 
 export type GetWorldFromClient = (clientX: number, clientY: number) => { x: number; y: number };
+export type GetClientFromWorld = (worldX: number, worldY: number) => { x: number; y: number };
+
+export interface CanvasTransformAPI {
+  screenToWorld: (clientX: number, clientY: number) => { x: number; y: number };
+  worldToScreen: (worldX: number, worldY: number) => { x: number; y: number };
+}
 
 const CanvasTransformContext = createContext<GetWorldFromClient | null>(null);
 
@@ -31,6 +37,17 @@ export const SpatialCanvas: React.FC<SpatialCanvasProps> = ({
     const rect = wrapperRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
     return clientToWorld(clientX, clientY, {
+      rect,
+      panX: transform.x,
+      panY: transform.y,
+      zoom: transform.scale,
+    });
+  }, [transform.x, transform.y, transform.scale]);
+
+  const getClientFromWorld = useCallback<GetClientFromWorld>((worldX, worldY) => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    return worldToClient(worldX, worldY, {
       rect,
       panX: transform.x,
       panY: transform.y,
