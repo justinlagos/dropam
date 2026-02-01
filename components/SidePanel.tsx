@@ -1,10 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send as SendIcon, FileText, CheckCircle2, Lock, Globe, Calendar, User } from 'lucide-react';
+import { X, Send as SendIcon, FileText, CheckCircle2, Lock, Globe, Calendar, User, Download, File, Image, FileVideo, FileAudio } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brief, Brand, COLORS } from '../types';
 import { useUser } from '../contexts/UserContext';
 import { useActions } from '../contexts/ActionContext';
 import { FileUpload } from './FileUpload';
+
+// Helper to get file icon based on extension/type
+const getFileIcon = (fileName: string) => {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) return Image;
+  if (['mp4', 'mov', 'avi', 'webm', 'mkv'].includes(ext)) return FileVideo;
+  if (['mp3', 'wav', 'ogg', 'flac', 'aac'].includes(ext)) return FileAudio;
+  return File;
+};
+
+// Download helper that forces download instead of opening in browser
+const downloadFile = async (url: string, fileName: string) => {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    // Fallback: open in new tab
+    window.open(url, '_blank');
+  }
+};
 
 interface SidePanelProps {
   brief: Brief | null;
@@ -173,10 +201,37 @@ export const SidePanel: React.FC<SidePanelProps> = ({
 
         <div className="w-full h-px bg-black/5 mb-6" />
 
+        {/* Brief Files (Original uploads from client) */}
+        {brief.files.filter(f => f.type === 'brief' || f.type === 'attachment').length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">Brief Files</h3>
+            <div className="space-y-2">
+              {brief.files.filter(f => f.type === 'brief' || f.type === 'attachment').map(file => {
+                const FileIcon = getFileIcon(file.name);
+                return (
+                  <div key={file.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:shadow-sm transition-all group">
+                    <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
+                      <FileIcon size={16} className="text-blue-500 shrink-0" />
+                      <span className="text-sm font-medium text-[#111111] truncate">{file.name}</span>
+                    </div>
+                    <button
+                      onClick={() => downloadFile(file.url, file.name)}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                      title="Download file"
+                    >
+                      <Download size={14} className="text-gray-500" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Deliverables Zone */}
         <div className="mb-6">
-             <h3 className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">Delivery</h3>
-             
+             <h3 className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">Deliverables</h3>
+
              {viewType === 'internal' && (
                  <FileUpload
                     className="border-2 border-dashed border-gray-100 bg-gray-50/30 rounded-2xl p-6 mb-4 text-center cursor-pointer hover:border-gray-300 hover:bg-gray-100/50 transition-all group"
@@ -197,14 +252,27 @@ export const SidePanel: React.FC<SidePanelProps> = ({
              )}
 
              <div className="space-y-2">
-                {brief.files.filter(f => f.type === 'deliverable' && (viewType === 'internal' || f.visibleToClient)).map(file => (
-                    <a key={file.id} href={file.url} target="_blank" rel="noreferrer" {...(viewType === 'client' ? { download: file.name } : {})} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:shadow-sm transition-all group">
-                        <div className="flex items-center gap-3 overflow-hidden">
-                            <CheckCircle2 size={16} className="text-green-500 shrink-0" />
-                            <span className="text-sm font-medium text-[#111111] truncate">{file.name}</span>
+                {brief.files.filter(f => f.type === 'deliverable' && (viewType === 'internal' || f.visibleToClient)).length === 0 && (
+                  <p className="text-xs text-gray-400 text-center py-2">No deliverables yet</p>
+                )}
+                {brief.files.filter(f => f.type === 'deliverable' && (viewType === 'internal' || f.visibleToClient)).map(file => {
+                    const FileIcon = getFileIcon(file.name);
+                    return (
+                      <div key={file.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:shadow-sm transition-all group">
+                        <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
+                          <CheckCircle2 size={16} className="text-green-500 shrink-0" />
+                          <span className="text-sm font-medium text-[#111111] truncate">{file.name}</span>
                         </div>
-                    </a>
-                ))}
+                        <button
+                          onClick={() => downloadFile(file.url, file.name)}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                          title="Download file"
+                        >
+                          <Download size={14} className="text-gray-500" />
+                        </button>
+                      </div>
+                    );
+                })}
              </div>
         </div>
 

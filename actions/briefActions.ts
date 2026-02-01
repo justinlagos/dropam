@@ -25,6 +25,43 @@ export type BriefActionCallbacks = {
   closeMenu: () => void;
 };
 
+// Helper to download a file
+async function downloadFile(url: string, fileName: string) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    // Fallback: open in new tab
+    window.open(url, '_blank');
+  }
+}
+
+// Download all files from a brief
+export async function downloadBriefFiles(brief: Brief) {
+  const files = brief.files || [];
+  if (files.length === 0) {
+    alert('No files to download');
+    return;
+  }
+
+  // Download each file with a small delay to prevent browser blocking
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    await downloadFile(file.url, file.name);
+    if (i < files.length - 1) {
+      await new Promise(r => setTimeout(r, 300));
+    }
+  }
+}
+
 export type UserContext = {
   currentUser: { id: string; name: string } | null;
   checkPermission: (action: string, resourceOwnerId?: string) => boolean;
@@ -43,8 +80,11 @@ export function getBriefContextMenuItems(
   const canReassign = checkPermission('reassign_brief');
   const canDelete = checkPermission('delete_brief');
 
+  const hasFiles = brief.files && brief.files.length > 0;
+
   const items: MenuItem[] = [
     { label: 'Open details', onClick: () => { callbacks.openDetails(); callbacks.closeMenu(); } },
+    ...(hasFiles ? [{ label: 'Download files', onClick: () => { downloadBriefFiles(brief); callbacks.closeMenu(); } }] : []),
     ...(canTake ? [{ label: 'Take brief', onClick: () => { currentUser && actions.assignBrief(brief.id, currentUser.id, currentUser.name); callbacks.closeMenu(); } }] : []),
     ...(brief.status === 'in_progress' ? [{ label: 'Mark in progress', onClick: () => {}, disabled: true }] : []),
     ...(canDeliver && brief.status === 'in_progress' ? [{ label: 'Move to review', onClick: () => { actions.updateBriefStatus(brief.id, 'review'); callbacks.closeMenu(); } }] : []),

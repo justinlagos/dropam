@@ -15,8 +15,42 @@ import {
 import { Brief, Brand } from '../types';
 import { getClientFolders, setClientFolders, generateFolderId, type ClientFolder } from '../utils/clientFolders';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Loader2, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, AlertCircle, Download } from 'lucide-react';
 import { ContextMenu } from '../components/ContextMenu';
+
+// Helper to download a file
+async function downloadFile(url: string, fileName: string) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    window.open(url, '_blank');
+  }
+}
+
+// Download all visible files from a brief
+async function downloadBriefFiles(brief: Brief) {
+  // For clients, only download visible deliverables
+  const files = brief.files.filter(f => f.visibleToClient || f.type === 'brief');
+  if (files.length === 0) {
+    alert('No files available for download');
+    return;
+  }
+  for (let i = 0; i < files.length; i++) {
+    await downloadFile(files[i].url, files[i].name);
+    if (i < files.length - 1) {
+      await new Promise(r => setTimeout(r, 300));
+    }
+  }
+}
 
 /** Get all files from a dropped directory (Chrome/Edge). */
 async function getFilesFromDirectoryEntry(dirEntry: FileSystemDirectoryEntry): Promise<File[]> {
@@ -539,6 +573,9 @@ export const ClientDropPage: React.FC = () => {
                 : contextMenu.brief
                 ? [
                     { label: 'View', onClick: () => { setSelectedBrief(contextMenu.brief!); setContextMenu(null); } },
+                    ...(contextMenu.brief.files && contextMenu.brief.files.length > 0
+                      ? [{ label: 'Download files', onClick: () => { downloadBriefFiles(contextMenu.brief!); setContextMenu(null); } }]
+                      : []),
                     { label: 'Send message', onClick: () => { setSelectedBrief(contextMenu.brief!); setContextMenu(null); } },
                     { label: 'Refresh', onClick: () => { getClientBriefs(shareToken!).then(({ briefs: list }) => setBriefs(list)); setContextMenu(null); } },
                   ]
